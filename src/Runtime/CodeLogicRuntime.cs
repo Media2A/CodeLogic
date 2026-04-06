@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using CodeLogic.Core.Events;
+using CodeLogic.Core.Logging;
 using CodeLogic.Core.Utilities;
 using CodeLogic.Framework.Application;
 using CodeLogic.Framework.Libraries;
@@ -11,6 +12,11 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly EventBus _eventBus = new();
+
+    // Framework-level logger — writes to Framework/logs/framework.log
+    // Created after config is loaded so it respects CodeLogic.json settings.
+    // Before that, startup messages go to Console only.
+    private ILogger _frameworkLogger = NullLogger.Instance;
 
     private CodeLogicOptions? _options;
     private CodeLogicConfiguration? _config;
@@ -69,6 +75,15 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             // Load CodeLogic.json
             await LoadConfigurationAsync();
 
+            // Create the framework logger now that we have config
+            _frameworkLogger = CreateFrameworkLogger();
+            _frameworkLogger.Info("Framework initialized");
+            _frameworkLogger.Info($"  Machine  : {CodeLogicEnvironment.MachineName}");
+            _frameworkLogger.Info($"  App      : {CodeLogicEnvironment.AppVersion}");
+            _frameworkLogger.Info($"  Debug    : {CodeLogicEnvironment.IsDebugging}");
+            _frameworkLogger.Info($"  Root     : {GetOptionsOrThrow().GetFrameworkPath()}");
+            _frameworkLogger.Info($"  App path : {GetOptionsOrThrow().GetApplicationPath()}");
+
             _initialized = true;
 
             // Register shutdown signals
@@ -106,7 +121,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         try
         {
             _application = application;
-            Console.WriteLine($"  Registered application: {application.Manifest.Name} v{application.Manifest.Version}");
+            _frameworkLogger.Info($"Application registered: {application.Manifest.Name} v{application.Manifest.Version}");
         }
         finally { _lock.Release(); }
     }
@@ -126,11 +141,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             var validator = new StartupValidator();
             var validation = validator.Validate(opts.GetFrameworkPath());
             foreach (var w in validator.GetWarnings())
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"  ! {w}");
-                Console.ResetColor();
-            }
+                _frameworkLogger.Warning(w);
             if (!validation.IsSuccess)
                 throw new InvalidOperationException($"Startup validation failed: {validation.ErrorMessage}");
 
@@ -153,7 +164,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             // Configure application
             if (_application != null)
             {
-                Console.WriteLine($"\n  Configuring application: {_application.Manifest.Name}...");
+                _frameworkLogger.Info($"Configuring application: {_application.Manifest.Name}");
                 var appCtx = CreateApplicationContext();
 
                 await _application.OnConfigureAsync(appCtx);
@@ -163,7 +174,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
                 await appCtx.Localization.LoadAllAsync(config.Localization.SupportedCultures);
 
                 _applicationContext = appCtx; // only assign after full success
-                Console.WriteLine($"  Configured: {_application.Manifest.Name}");
+                _frameworkLogger.Info($"Application configured: {_application.Manifest.Name}");
             }
         }
         finally { _lock.Release(); }
@@ -191,9 +202,10 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
             if (_application != null && _applicationContext != null)
             {
+                _frameworkLogger.Info($"Starting application: {_application.Manifest.Name}");
                 await _application.OnInitializeAsync(_applicationContext);
                 await _application.OnStartAsync(_applicationContext);
-                Console.WriteLine($"  Application started: {_application.Manifest.Name}");
+                _frameworkLogger.Info($"Application started: {_application.Manifest.Name}");
             }
         }
         finally { _lock.Release(); }
@@ -210,13 +222,15 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
             if (_application != null)
             {
-                Console.WriteLine($"\n  Stopping application: {_application.Manifest.Name}...");
+                _frameworkLogger.Info($"Stopping application: {_application.Manifest.Name}");
                 try { await _application.OnStopAsync(); }
-                catch (Exception ex) { Console.Error.WriteLine($"  ! Application stop error: {ex.Message}"); }
+                catch (Exception ex) { _frameworkLogger.Error($"Application stop error: {ex.Message}", ex); }
             }
 
             if (_libraryManager != null)
                 await _libraryManager.StopAllAsync();
+
+            _frameworkLogger.Info("Framework stopped");
         }
         finally { _lock.Release(); }
     }
@@ -287,9 +301,29 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
     {
         // Debug defaults are applied when generating CodeLogic.json (FirstRunManager).
         // At runtime, the loaded config always wins.
-        // We only need to note the debug state for diagnostics.
         if (Debugger.IsAttached)
-            Console.WriteLine("  [Debug] Debugger attached — verbose defaults applied to new configs");
+            Console.WriteLine("[CodeLogic] Debugger attached — verbose defaults applied to new configs");
+    }
+
+    private ILogger CreateFrameworkLogger()
+    {
+        var opts    = GetOptionsOrThrow();
+        var config  = GetConfigOrThrow();
+        var logsDir = Path.Combine(opts.GetFrameworkPath(), "Framework", "logs");
+        Directory.CreateDirectory(logsDir);
+
+        var loggingOpts = config.Logging.ToLoggingOptions();
+
+        // Framework logger always writes at least Info — startup messages
+        // should always be visible and logged regardless of globalLevel.
+        // Libraries and the application respect the configured level.
+        if (loggingOpts.GlobalLevel > LogLevel.Info)
+            loggingOpts.GlobalLevel = LogLevel.Info;
+
+        loggingOpts.EnableConsoleOutput = true;
+        loggingOpts.ConsoleMinimumLevel = LogLevel.Info;
+
+        return new Logger("CODELOGIC", logsDir, LogLevel.Info, loggingOpts);
     }
 
     private async Task LoadConfigurationAsync()
