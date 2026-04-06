@@ -37,9 +37,22 @@ public abstract class ConfigModelBase
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class ConfigSectionAttribute : Attribute
 {
+    /// <summary>
+    /// The section name used as a suffix in the config file name.
+    /// Example: "database" → config file is named <c>config.database.json</c>.
+    /// </summary>
     public string SectionName { get; }
+
+    /// <summary>
+    /// Schema version for the config section. Informational — not used for migration.
+    /// Default: 1.
+    /// </summary>
     public int Version { get; init; } = 1;
 
+    /// <summary>
+    /// Initializes the attribute with a section name.
+    /// </summary>
+    /// <param name="sectionName">The suffix for the config file name (e.g., "database").</param>
     public ConfigSectionAttribute(string sectionName)
     {
         SectionName = sectionName;

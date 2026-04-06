@@ -1,0 +1,50 @@
+# CodeLogic 3 Documentation
+
+CodeLogic is a modular .NET 10 framework for building structured, lifecycle-aware applications. It provides libraries, plugins, configuration, localization, logging, events, and health checks — all wired together through a strict boot sequence.
+
+---
+
+## Getting Started
+
+| Document | Description |
+|----------|-------------|
+| [Getting Started](getting-started.md) | Installation, the 5-step boot sequence, first run behavior, your first library and application, and a minimal working example. |
+
+---
+
+## Core
+
+The building blocks available to all components.
+
+| Document | Description |
+|----------|-------------|
+| [Logging](Core/logging.md) | `ILogger`, `LogLevel`, `LoggingMode`, `LoggingOptions`, `NullLogger`, development vs production behavior, log file locations, and console output. |
+| [Configuration](Core/configuration.md) | `ConfigModelBase`, `ConfigSectionAttribute`, `IConfigurationManager`, file naming, the Register → Generate → Load → Save → Reload lifecycle, and DataAnnotations validation. |
+| [Localization](Core/localization.md) | `LocalizationModelBase`, `LocalizationSectionAttribute`, `LocalizedStringAttribute`, `ILocalizationManager`, culture fallback, file naming, reload support, and format strings. |
+| [Events](Core/events.md) | `IEventBus`, `IEvent`, `IEventSubscription`, framework events reference, the `ComponentAlertEvent` bridge pattern, thread safety, and code examples. |
+| [Results](Core/results.md) | `Result<T>`, `Result`, `Error`, `ErrorCode` — the framework's error handling pattern with factory methods, implicit conversions, and chaining. |
+
+---
+
+## Framework
+
+Library, application, and plugin development.
+
+| Document | Description |
+|----------|-------------|
+| [Libraries](Framework/libraries.md) | `ILibrary` 4-phase lifecycle, `LibraryContext`, `LibraryManifest`, `LibraryDependency`, `LibraryState`, dependency resolution, and `HealthStatus`. |
+| [Application](Framework/application.md) | `IApplication` lifecycle, `ApplicationContext`, `ApplicationManifest`, lifecycle ordering relative to libraries, and `HealthCheckAsync`. |
+| [Plugins](Framework/plugins.md) | `IPlugin` hot-reload lifecycle, `PluginContext`, `PluginManifest`, `PluginManager`, `FileSystemWatcher` hot-reload, `SetPluginManager`/`GetPluginManager`. |
+
+---
+
+## Reference
+
+Configuration files, CLI arguments, and runtime environment.
+
+| Document | Description |
+|----------|-------------|
+| [CLI Arguments](Reference/cli-args.md) | All supported command-line flags: `--version`, `--info`, `--health`, `--generate-configs`, `--generate-configs-force`, `--dry-run`, and scoping. |
+| [CodeLogic.json Reference](Reference/codelogic-json.md) | Complete reference for `CodeLogic.json` and `CodeLogic.Development.json` — every section and property with defaults and examples. |
+| [Environment](Reference/environment.md) | `CodeLogicEnvironment` properties, `IsDevelopment` detection logic, `IsDebugging`, and `AppVersion` lifecycle. |
+| [Health Checks](Reference/health-checks.md) | `HealthStatus`, `HealthReport`, `ToJson()`, `ToConsoleString()`, scheduled checks, the `--health` CLI flag, and implementing `HealthCheckAsync`. |

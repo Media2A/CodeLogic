@@ -4,9 +4,19 @@ namespace CodeLogic;
 
 /// <summary>
 /// Static accessor for loaded libraries.
+/// Provides a convenient shorthand over <see cref="CodeLogic.GetLibraryManager()"/>.
 /// </summary>
 public static class Libraries
 {
+    /// <summary>
+    /// Retrieves a loaded library by its concrete type.
+    /// Returns null if no library of type <typeparamref name="T"/> is loaded.
+    /// </summary>
+    /// <typeparam name="T">The library type, which must implement <see cref="ILibrary"/>.</typeparam>
+    /// <returns>The library instance, or null if not loaded.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if <see cref="CodeLogic.ConfigureAsync"/> has not been called yet.
+    /// </exception>
     public static T? Get<T>() where T : class, ILibrary
     {
         var mgr = CodeLogic.GetLibraryManager()
@@ -14,6 +24,18 @@ public static class Libraries
         return mgr.GetLibrary<T>();
     }
 
+    /// <summary>
+    /// Dynamically loads a library by type and registers it with the LibraryManager.
+    /// Call this between <see cref="CodeLogic.InitializeAsync"/> and <see cref="CodeLogic.ConfigureAsync"/>
+    /// to register libraries before the configure/start sequence runs.
+    /// </summary>
+    /// <typeparam name="T">
+    /// The library type. Must implement <see cref="ILibrary"/> and have a public parameterless constructor.
+    /// </typeparam>
+    /// <returns>True if the library was loaded successfully; false if it was already registered.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if <see cref="CodeLogic.InitializeAsync"/> has not been called yet.
+    /// </exception>
     public static async Task<bool> LoadAsync<T>() where T : class, ILibrary, new()
     {
         var mgr = CodeLogic.GetLibraryManager()
@@ -23,6 +45,14 @@ public static class Libraries
         return await mgr.LoadLibraryAsync<T>();
     }
 
+    /// <summary>
+    /// Retrieves a loaded library by its string ID (e.g., <c>"CL.SQLite"</c>).
+    /// Returns null if no library with that ID is loaded.
+    /// </summary>
+    /// <param name="libraryId">The library ID as declared in its <see cref="LibraryManifest.Id"/>.</param>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if <see cref="CodeLogic.ConfigureAsync"/> has not been called yet.
+    /// </exception>
     public static ILibrary? Get(string libraryId)
     {
         var mgr = CodeLogic.GetLibraryManager()
@@ -30,6 +60,11 @@ public static class Libraries
         return mgr.GetLibrary(libraryId);
     }
 
+    /// <summary>
+    /// Returns all currently loaded libraries.
+    /// Safe to call before <see cref="CodeLogic.ConfigureAsync"/> — returns an empty sequence rather than throwing.
+    /// Useful for diagnostics or iterating all libraries without knowing their types.
+    /// </summary>
     public static IEnumerable<ILibrary> GetAll()
     {
         // Returns empty (not throws) when called before ConfigureAsync —

@@ -19,7 +19,16 @@ public abstract class LocalizationModelBase
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class LocalizationSectionAttribute : Attribute
 {
+    /// <summary>
+    /// The prefix used in the localization file name.
+    /// Example: "homepoint" → file is named <c>homepoint.en-US.json</c>.
+    /// </summary>
     public string SectionName { get; }
+
+    /// <summary>
+    /// Initializes the attribute with a section name.
+    /// </summary>
+    /// <param name="sectionName">The file name prefix (e.g., "homepoint").</param>
     public LocalizationSectionAttribute(string sectionName) => SectionName = sectionName;
 }
 
