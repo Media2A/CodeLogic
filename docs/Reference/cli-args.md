@@ -1,45 +1,36 @@
 # CLI Arguments
 
-CodeLogic automatically parses command-line arguments during `InitializeAsync`. Arguments override programmatic options — CLI always wins.
+CodeLogic parses command-line arguments during `InitializeAsync()`. CLI flags override programmatic options.
 
 ---
 
-## All Supported Arguments
+## Supported Flags
 
 | Argument | Description |
 |----------|-------------|
 | `--version` | Print framework and app version, then exit |
-| `--info` | Print framework info (paths, machine, version), then exit |
-| `--health` | Run a health check after startup and print the report, then exit |
-| `--generate-configs` | Generate missing config files with defaults |
-| `--generate-configs-force` | Regenerate ALL config files (overwrites existing) |
-| `--dry-run` | Parse args and validate but do not persist changes |
+| `--info` | Print runtime info, then exit |
+| `--health` | Run a health check after startup |
+| `--generate-configs` | Generate missing config files before startup continues |
+| `--generate-configs-force` | Overwrite existing config files with defaults |
+| `--dry-run` | Run `ConfigureAsync()` only, validate startup inputs, and do not write files |
 
 ---
 
-## --version
+## `--version`
 
-Prints the framework and application version, then exits:
-
-```
+```text
 $ myapp --version
 CodeLogic 3.0.0 | App 1.0.0
 ```
 
-`InitializationResult.ShouldExit = true` — check this and return immediately:
-
-```csharp
-var result = await CodeLogic.InitializeAsync(o => o.AppVersion = "1.0.0");
-if (result.ShouldExit) return;
-```
+This sets `InitializationResult.ShouldExit = true`.
 
 ---
 
-## --info
+## `--info`
 
-Prints detailed information about the framework's configuration, then exits:
-
-```
+```text
 $ myapp --info
 CodeLogic 3.0.0
   App version  : 1.0.0
@@ -50,11 +41,13 @@ CodeLogic 3.0.0
   Development  : False
 ```
 
+This also sets `InitializationResult.ShouldExit = true`.
+
 ---
 
-## --health
+## `--health`
 
-Signals the caller that a health check should be run after startup:
+`--health` does not exit immediately. It sets `InitializationResult.RunHealthCheck = true`, so the caller can complete startup first:
 
 ```csharp
 var result = await CodeLogic.InitializeAsync(o => o.AppVersion = "1.0.0");
@@ -65,7 +58,6 @@ CodeLogic.RegisterApplication(new MyApp());
 await CodeLogic.ConfigureAsync();
 await CodeLogic.StartAsync();
 
-// Handle --health after startup (libraries must be running for accurate results)
 if (result.RunHealthCheck)
 {
     var report = await CodeLogic.GetHealthAsync();
@@ -75,141 +67,107 @@ if (result.RunHealthCheck)
 }
 ```
 
-Unlike `--version` and `--info`, `--health` does NOT set `ShouldExit = true` immediately. It sets `RunHealthCheck = true` so the caller can run the full startup sequence first, then check health and exit.
-
-```
-$ myapp --health
-Health Report — 2026-04-06 10:30:00 UTC
-Machine: MY-MACHINE  App: 1.0.0
-Overall: HEALTHY
-
-Libraries:
-  Healthy    CL.SQLite: Database at data/mydb.sqlite
-  Healthy    CL.Mail: SMTP connected
-
-Application: Healthy — HomePoint is running
-```
-
 ---
 
-## --generate-configs
+## `--generate-configs`
 
-Generates missing config files with defaults, then continues (or exits if `ExitAfterGenerate = true`):
+Generates missing application and library config files during `ConfigureAsync()`. Existing files are left untouched.
 
-```
+```text
 $ myapp --generate-configs
-  Generated: CodeLogic/Libraries/CL.SQLite/config.json
-  Generated: CodeLogic/Application/config.json
 ```
 
-Does NOT overwrite existing files. Combine with `--dry-run` to preview without writing.
+You can scope generation to specific libraries by appending library IDs:
 
-### Scoping to specific libraries
-
-Append library IDs to limit generation:
-
-```
+```text
 $ myapp --generate-configs CL.SQLite CL.Mail
 ```
 
-This sets `GenerateConfigsFor = ["CL.SQLite", "CL.Mail"]`. Only those libraries' configs are generated.
+Scoping applies to libraries only. The application config still follows the normal generation rules.
 
 ---
 
-## --generate-configs-force
+## `--generate-configs-force`
 
-Regenerates ALL config files, overwriting existing ones:
+Overwrites existing config files with defaults during `ConfigureAsync()`.
 
-```
+```text
 $ myapp --generate-configs-force
-  Overwritten: CodeLogic/Libraries/CL.SQLite/config.json
-  Overwritten: CodeLogic/Application/config.json
 ```
 
-**Destructive** — existing customizations are lost. Use with caution.
+Scoped force generation is also supported:
 
-Also supports scoping:
-
-```
+```text
 $ myapp --generate-configs-force CL.SQLite
 ```
 
+When scoped, only the listed libraries are force-regenerated.
+
 ---
 
-## --dry-run
+## `--dry-run`
 
-Parse and validate arguments without writing any files. Useful for CI:
+Runs `ConfigureAsync()` only:
 
-```
+- runs `OnConfigureAsync()` on the application and libraries
+- validates existing config and localization files
+- prints any config files that would be generated or overwritten
+- does not write files
+- skips `OnInitializeAsync()` and `OnStartAsync()`
+
+Example:
+
+```text
 $ myapp --generate-configs --dry-run
-[dry-run] Would generate: CodeLogic/Libraries/CL.SQLite/config.json
-[dry-run] Would generate: CodeLogic/Application/config.json
+[dry-run] Would generate: CodeLogic\Application\config.json
+[dry-run] Would generate: CodeLogic\Libraries\CL.SQLite\config.json
+Dry run complete - all config files validated successfully.
 ```
+
+If `--generate-configs-force` is combined with `--dry-run`, existing config files are reported as `Would overwrite`.
 
 ---
 
-## InitializationResult
-
-`InitializeAsync` returns an `InitializationResult` that captures the outcome:
+## `InitializationResult`
 
 ```csharp
 public sealed class InitializationResult
 {
-    bool Success { get; init; }           // false = initialization failed
-    bool IsFirstRun { get; init; }        // true if directory structure was just scaffolded
-    bool ShouldExit { get; init; }        // true if the process should exit now
-    string Message { get; init; }         // human-readable description
-
-    /// When true: start fully, run health check, then exit.
+    bool Success { get; init; }
+    bool IsFirstRun { get; init; }
+    bool ShouldExit { get; init; }
+    string Message { get; init; }
     bool RunHealthCheck { get; init; }
-
-    static InitializationResult Succeeded(bool isFirstRun, bool runHealthCheck);
-    static InitializationResult Failed(string message);
-    static InitializationResult Exit(string message);  // success + ShouldExit=true
 }
 ```
 
-### Handling all cases
+Typical handling:
 
 ```csharp
 var result = await CodeLogic.InitializeAsync(o => o.AppVersion = "1.0.0");
 
 if (!result.Success)
 {
-    Console.Error.WriteLine($"Startup failed: {result.Message}");
+    Console.Error.WriteLine(result.Message);
     Environment.Exit(1);
 }
 
 if (result.ShouldExit)
-{
-    // --version or --info was handled
     return;
-}
-
-// ... rest of startup ...
-
-if (result.RunHealthCheck)
-{
-    var report = await CodeLogic.GetHealthAsync();
-    Console.WriteLine(report.ToConsoleString());
-    await CodeLogic.StopAsync();
-    return;
-}
 ```
 
 ---
 
 ## Programmatic Equivalents
 
-Any CLI arg can also be set programmatically (CLI overrides programmatic):
-
 ```csharp
 await CodeLogic.InitializeAsync(o =>
 {
-    o.AppVersion         = "1.0.0";
-    o.GenerateConfigs    = true;        // --generate-configs
-    o.GenerateConfigsForce = false;     // --generate-configs-force
-    o.GenerateConfigsFor = null;        // null = all libraries
-    o.ExitAfterGenerate  = false;       // exit after generating
+    o.AppVersion = "1.0.0";
+    o.GenerateConfigs = true;
+    o.GenerateConfigsForce = false;
+    o.GenerateConfigsFor = null;
+    o.ExitAfterGenerate = false;
+    o.DryRun = false;
 });
 ```

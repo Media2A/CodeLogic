@@ -39,7 +39,7 @@ CodeLogic.CodeLogic.RegisterApplication(new DemoApplication());
 await CodeLogic.CodeLogic.ConfigureAsync();
 
 // ── Step 5: Start ─────────────────────────────────────────────────────────
-// Runs Configure → Initialize → Start on all libs, then Initialize → Start on app.
+// Runs Configure on the app and libraries, then Initialize/Start on libraries before the app.
 await CodeLogic.CodeLogic.StartAsync();
 
 // ── Step 6: Create PluginManager + load in-process plugins ────────────────

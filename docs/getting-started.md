@@ -6,7 +6,7 @@ CodeLogic is a modular .NET 10 framework for building structured applications wi
 
 ## Installation
 
-CodeLogic is distributed as a project reference (source library). Add it to your project:
+Add CodeLogic as a project reference:
 
 ```xml
 <ItemGroup>
@@ -30,43 +30,31 @@ Your project should target .NET 10:
 
 ## The 5-Step Boot Sequence
 
-Every CodeLogic application follows the same boot sequence:
-
 ```csharp
-// Program.cs
 using CodeLogic;
 
-// Step 1: Initialize — parse CLI args, scaffold directories, load CodeLogic.json
 var result = await CodeLogic.InitializeAsync(o =>
 {
     o.AppVersion = "1.0.0";
-    o.FrameworkRootPath = "CodeLogic";   // default
+    o.FrameworkRootPath = "CodeLogic";
 });
 
-// Always check ShouldExit — handles --version, --generate-configs, etc.
 if (result.ShouldExit) return;
 
-// Step 2: Register libraries (between Init and Configure)
 await Libraries.LoadAsync<MyLibrary>();
-
-// Step 3: Register the application
 CodeLogic.RegisterApplication(new MyApp());
 
-// Step 4: Configure — generates/loads config, runs OnConfigureAsync
 await CodeLogic.ConfigureAsync();
-
-// Step 5: Start — runs Initialize + Start phases for libraries, then the application
 await CodeLogic.StartAsync();
 
-// Check --health flag
 if (result.RunHealthCheck)
 {
     var report = await CodeLogic.GetHealthAsync();
     Console.WriteLine(report.ToConsoleString());
+    await CodeLogic.StopAsync();
     return;
 }
 
-// Keep running until shutdown signal
 await Task.Delay(Timeout.Infinite);
 ```
 
@@ -74,141 +62,129 @@ await Task.Delay(Timeout.Infinite);
 
 | Step | Method | What happens |
 |------|--------|--------------|
-| 1 | `InitializeAsync` | Parses CLI args, runs first-run scaffold, loads `CodeLogic.json`, creates `LibraryManager` |
-| 2 | `Libraries.LoadAsync<T>` | Registers library types with the `LibraryManager` |
+| 1 | `InitializeAsync` | Parses CLI args, scaffolds the directory tree on first run, loads framework config, creates `LibraryManager` |
+| 2 | `Libraries.LoadAsync<T>` | Registers library types before configure/start |
 | 3 | `RegisterApplication` | Registers your `IApplication` implementation |
-| 4 | `ConfigureAsync` | Calls `OnConfigureAsync` on the app, generates and loads all config/localization files |
-| 5 | `StartAsync` | Runs Configure → Initialize → Start on libraries, then Initialize → Start on the app |
+| 4 | `ConfigureAsync` | Discovers DLL libraries, runs `OnConfigureAsync` on the application and libraries, then generates or loads config/localization files |
+| 5 | `StartAsync` | Runs `OnInitializeAsync` then `OnStartAsync` on libraries first, then the application |
 
 ---
 
 ## First Run Behavior
 
-On first run (when the `CodeLogic/` directory does not yet exist), the framework:
+On first run, CodeLogic scaffolds the directory tree and continues startup normally. Missing config files are generated with defaults as part of `ConfigureAsync()`.
 
-1. Detects the missing directory and prints: `First run detected — scaffolding directory structure...`
-2. Creates the full directory tree (see below)
-3. Generates `CodeLogic.json` with defaults
-4. Continues normally (no exit)
+Typical layout:
 
-You will see output like:
-
-```
-First run detected — scaffolding directory structure...
-  Created 12 directories
-
-[CodeLogic] Using CodeLogic.Development.json (DEBUG build)
-  ✓ Configured: MyApp
-  ✓ Configured: MyLibrary
-  ✓ Initialized: MyLibrary
-  ✓ Started: MyLibrary
-  ✓ Application started: MyApp
-```
-
----
-
-## Directory Structure Created
-
-After first run, the framework creates:
-
-```
+```text
 YourApp.exe
 CodeLogic/
   Framework/
-    CodeLogic.json              ← main framework config
-    CodeLogic.Development.json  ← development overrides (add to .gitignore)
+    CodeLogic.json
+    CodeLogic.Development.json
     logs/
-      framework.log             ← framework startup log
+      framework.log
   Libraries/
     CL.YourLibrary/
-      config.json               ← library config (generated)
+      config.json
       localization/
-        strings.en-US.json      ← localization templates (generated)
+        strings.en-US.json
       logs/
       data/
   Application/
-    config.json                 ← application config
+    config.json
     localization/
     logs/
     data/
-  Plugins/                      ← plugin folders go here
+  Plugins/
 ```
 
 ---
 
 ## Development vs Production Config
 
-The framework automatically selects the right config file:
+The runtime chooses one complete framework config file:
 
 | Condition | File loaded |
 |-----------|-------------|
-| `DEBUG` build OR debugger attached | `CodeLogic.Development.json` |
-| `Release` build, no debugger | `CodeLogic.json` |
+| `DEBUG` build or debugger attached | `CodeLogic.Development.json` |
+| Release build without debugger | `CodeLogic.json` |
 
-`CodeLogic.Development.json` is your per-machine development override. Typical development settings:
+`CodeLogic.Development.json` is a full replacement file, not an overlay or merge. If a section is omitted there, it falls back to the model's default values, not to values from `CodeLogic.json`.
+
+Example development file:
 
 ```json
 {
+  "framework": {
+    "name": "CodeLogic",
+    "version": "3.0.0"
+  },
   "logging": {
+    "mode": "singleFile",
+    "maxFileSizeMb": 10,
+    "maxRolledFiles": 5,
+    "fileNamePattern": "{date:yyyy}/{date:MM}/{date:dd}/{level}.log",
     "globalLevel": "Debug",
     "enableConsoleOutput": true,
-    "consoleMinimumLevel": "Debug"
+    "consoleMinimumLevel": "Debug",
+    "enableDebugMode": true,
+    "centralizedDebugLog": false,
+    "centralizedLogsPath": null,
+    "includeMachineName": true,
+    "timestampFormat": "yyyy-MM-dd HH:mm:ss.fff"
+  },
+  "localization": {
+    "defaultCulture": "en-US",
+    "supportedCultures": ["en-US", "da-DK"],
+    "autoGenerateTemplates": true
+  },
+  "libraries": {
+    "discoveryPattern": "CL.*",
+    "enableDependencyResolution": true
+  },
+  "healthChecks": {
+    "enabled": true,
+    "intervalSeconds": 10
   }
 }
 ```
 
-**Add `CodeLogic.Development.json` to `.gitignore`** — it is per-machine and should never be committed.
+Add `CodeLogic.Development.json` to `.gitignore`.
 
 ---
 
 ## Your First Application
 
-Implement `IApplication`:
-
 ```csharp
-using CodeLogic.Framework.Application;
-using CodeLogic.Framework.Libraries;
 using CodeLogic.Core.Configuration;
+using CodeLogic.Framework.Application;
 
 public class MyApp : IApplication
 {
     public ApplicationManifest Manifest => new()
     {
-        Id          = "myapp",
-        Name        = "My Application",
-        Version     = "1.0.0",
-        Description = "My first CodeLogic app"
+        Id = "myapp",
+        Name = "My Application",
+        Version = "1.0.0"
     };
 
-    private AppConfig _config = null!;
-
-    // Phase 1: Register config models (called during ConfigureAsync)
     public Task OnConfigureAsync(ApplicationContext context)
     {
         context.Configuration.Register<AppConfig>();
         return Task.CompletedTask;
     }
 
-    // Phase 2: Load config and initialize services (called during StartAsync, after libraries)
     public Task OnInitializeAsync(ApplicationContext context)
     {
-        _config = context.Configuration.Get<AppConfig>();
-        context.Logger.Info($"App initialized. GreetingName={_config.GreetingName}");
+        var config = context.Configuration.Get<AppConfig>();
+        context.Logger.Info($"GreetingName={config.GreetingName}");
         return Task.CompletedTask;
     }
 
-    // Phase 3: Start (called immediately after Initialize)
-    public Task OnStartAsync(ApplicationContext context)
-    {
-        context.Logger.Info("Application started!");
-        return Task.CompletedTask;
-    }
-
-    // Phase 4: Stop (called before libraries stop)
-    public Task OnStopAsync()
-    {
-        return Task.CompletedTask;
-    }
+    public Task OnStartAsync(ApplicationContext context) => Task.CompletedTask;
+    public Task OnStopAsync() => Task.CompletedTask;
+    public Task<HealthStatus> HealthCheckAsync() => Task.FromResult(HealthStatus.Healthy("Running"));
 }
 
 public class AppConfig : ConfigModelBase
@@ -221,57 +197,35 @@ public class AppConfig : ConfigModelBase
 
 ## Your First Library
 
-Implement `ILibrary`:
-
 ```csharp
-using CodeLogic.Framework.Libraries;
 using CodeLogic.Core.Configuration;
+using CodeLogic.Framework.Libraries;
 
 public class MyLibrary : ILibrary
 {
     public LibraryManifest Manifest => new()
     {
-        Id      = "CL.MyLibrary",
-        Name    = "My Library",
+        Id = "CL.MyLibrary",
+        Name = "My Library",
         Version = "1.0.0"
     };
 
-    private LibraryContext _context = null!;
-
-    // Phase 1: Register config models
     public Task OnConfigureAsync(LibraryContext context)
     {
         context.Configuration.Register<MyLibraryConfig>();
         return Task.CompletedTask;
     }
 
-    // Phase 2: Load config and set up services
     public Task OnInitializeAsync(LibraryContext context)
     {
-        _context = context;
         var config = context.Configuration.Get<MyLibraryConfig>();
-        context.Logger.Info($"Initialized. MaxItems={config.MaxItems}");
+        context.Logger.Info($"MaxItems={config.MaxItems}");
         return Task.CompletedTask;
     }
 
-    // Phase 3: Start background services
-    public Task OnStartAsync(LibraryContext context)
-    {
-        context.Logger.Info("Library started");
-        return Task.CompletedTask;
-    }
-
-    // Phase 4: Graceful shutdown
-    public Task OnStopAsync()
-    {
-        _context.Logger.Info("Library stopped");
-        return Task.CompletedTask;
-    }
-
-    // Health check
-    public Task<HealthStatus> HealthCheckAsync()
-        => Task.FromResult(HealthStatus.Healthy("All good"));
-
+    public Task OnStartAsync(LibraryContext context) => Task.CompletedTask;
+    public Task OnStopAsync() => Task.CompletedTask;
+    public Task<HealthStatus> HealthCheckAsync() => Task.FromResult(HealthStatus.Healthy("All good"));
     public void Dispose() { }
 }
 
@@ -283,12 +237,22 @@ public class MyLibraryConfig : ConfigModelBase
 
 ---
 
+## Useful CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Print version and exit |
+| `--info` | Print framework info and exit |
+| `--health` | Run a health check after startup |
+| `--generate-configs` | Generate missing config files before startup continues |
+| `--generate-configs-force` | Overwrite existing config files with defaults |
+| `--dry-run` | Run `ConfigureAsync()` only, validate startup inputs, and do not write files |
+
+---
+
 ## Minimal Working Example
 
-The smallest possible CodeLogic application:
-
 ```csharp
-// Program.cs
 using CodeLogic;
 
 var result = await CodeLogic.InitializeAsync(o => o.AppVersion = "1.0.0");
@@ -301,4 +265,4 @@ Console.WriteLine("Running. Press Ctrl+C to stop.");
 await Task.Delay(Timeout.Infinite);
 ```
 
-No libraries, no application class — just the framework running. From here, add libraries with `Libraries.LoadAsync<T>()` and an application with `CodeLogic.RegisterApplication(new MyApp())`.
+No libraries and no application are required to boot the framework itself. Add libraries with `Libraries.LoadAsync<T>()` and register an application with `CodeLogic.RegisterApplication(new MyApp())` when you are ready.

@@ -80,7 +80,7 @@ public sealed class LocalizationManager : ILocalizationManager
         }
     }
 
-    public async Task LoadAsync<T>(IReadOnlyList<string> cultures)
+    public async Task LoadAsync<T>(IReadOnlyList<string> cultures, bool generateIfMissing = true)
         where T : LocalizationModelBase, new()
     {
         var type = typeof(T);
@@ -92,7 +92,13 @@ public sealed class LocalizationManager : ILocalizationManager
         {
             var filePath = GetFilePath<T>(culture);
             if (!File.Exists(filePath))
+            {
+                if (!generateIfMissing)
+                    throw new FileNotFoundException(
+                        $"Localization file for '{type.Name}' and culture '{culture}' not found at: {filePath}");
+
                 await GenerateTemplatesAsync<T>([culture]);
+            }
 
             var json = await File.ReadAllTextAsync(filePath);
             T localization;
@@ -106,7 +112,7 @@ public sealed class LocalizationManager : ILocalizationManager
             }
             else
             {
-                defaultLocalization ??= await EnsureDefaultLoadedAsync<T>();
+                defaultLocalization ??= await EnsureDefaultLoadedAsync<T>(generateIfMissing);
                 localization = MergeWithDefault(defaultLocalization, json);
             }
 
@@ -124,10 +130,10 @@ public sealed class LocalizationManager : ILocalizationManager
             await InvokeGenericAsync(nameof(GenerateTemplatesAsync), type, cultures);
     }
 
-    public async Task LoadAllAsync(IReadOnlyList<string> cultures)
+    public async Task LoadAllAsync(IReadOnlyList<string> cultures, bool generateIfMissing = true)
     {
         foreach (var type in _registered.Keys)
-            await InvokeGenericAsync(nameof(LoadAsync), type, cultures);
+            await InvokeGenericAsync(nameof(LoadAsync), type, cultures, generateIfMissing);
     }
 
     public async Task ReloadAllAsync(IReadOnlyList<string> cultures)
@@ -152,7 +158,7 @@ public sealed class LocalizationManager : ILocalizationManager
         return !string.IsNullOrWhiteSpace(attr?.SectionName) ? attr.SectionName : typeof(T).Name;
     }
 
-    private async Task<T> EnsureDefaultLoadedAsync<T>() where T : LocalizationModelBase, new()
+    private async Task<T> EnsureDefaultLoadedAsync<T>(bool generateIfMissing) where T : LocalizationModelBase, new()
     {
         var type = typeof(T);
 
@@ -162,7 +168,13 @@ public sealed class LocalizationManager : ILocalizationManager
 
         var filePath = GetFilePath<T>(_defaultCulture);
         if (!File.Exists(filePath))
+        {
+            if (!generateIfMissing)
+                throw new FileNotFoundException(
+                    $"Localization file for '{type.Name}' and culture '{_defaultCulture}' not found at: {filePath}");
+
             await GenerateTemplatesAsync<T>([_defaultCulture]);
+        }
 
         var json = await File.ReadAllTextAsync(filePath);
         var localization = JsonSerializer.Deserialize<T>(json, _jsonOptions)
@@ -197,7 +209,7 @@ public sealed class LocalizationManager : ILocalizationManager
             ?? throw new InvalidOperationException("Failed to deserialize merged localization.");
     }
 
-    private async Task InvokeGenericAsync(string methodName, Type typeArg, IReadOnlyList<string> cultures)
+    private async Task InvokeGenericAsync(string methodName, Type typeArg, IReadOnlyList<string> cultures, params object[] extraArgs)
     {
         var method = typeof(LocalizationManager)
             .GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)
@@ -205,7 +217,11 @@ public sealed class LocalizationManager : ILocalizationManager
                 $"Reflection failed: method '{methodName}' not found on LocalizationManager.");
 
         var generic = method.MakeGenericMethod(typeArg);
-        var task = generic.Invoke(this, [cultures]) as Task
+        var args = new object[1 + extraArgs.Length];
+        args[0] = cultures;
+        Array.Copy(extraArgs, 0, args, 1, extraArgs.Length);
+
+        var task = generic.Invoke(this, args) as Task
             ?? throw new InvalidOperationException(
                 $"Reflection failed: '{methodName}<{typeArg.Name}>' returned null.");
 

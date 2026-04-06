@@ -17,8 +17,8 @@ public interface IConfigurationManager
     /// <summary>Generates the config file with defaults if it doesn't exist, or overwrites it when <paramref name="force"/> is true.</summary>
     Task GenerateDefaultAsync<T>(bool force = false) where T : ConfigModelBase, new();
 
-    /// <summary>Loads a config from disk. Generates defaults if missing. Validates after load.</summary>
-    Task LoadAsync<T>() where T : ConfigModelBase, new();
+    /// <summary>Loads a config from disk. Generates defaults if missing when <paramref name="generateIfMissing"/> is true. Validates after load.</summary>
+    Task LoadAsync<T>(bool generateIfMissing = true) where T : ConfigModelBase, new();
 
     /// <summary>
     /// Saves config to disk. Validates before writing — throws if invalid.
@@ -28,8 +28,11 @@ public interface IConfigurationManager
     /// <summary>Generates defaults for all registered types that don't have files yet, or overwrites them when <paramref name="force"/> is true.</summary>
     Task GenerateAllDefaultsAsync(bool force = false);
 
-    /// <summary>Loads all registered configs.</summary>
-    Task LoadAllAsync();
+    /// <summary>Loads all registered configs. Generates missing files only when <paramref name="generateIfMissing"/> is true.</summary>
+    Task LoadAllAsync(bool generateIfMissing = true);
+
+    /// <summary>Validates all registered config files that already exist on disk. Missing files are allowed only when <paramref name="allowMissingFiles"/> is true.</summary>
+    Task ValidateAllAsync(bool allowMissingFiles = false);
 
     /// <summary>
     /// Reloads a specific config from disk and updates the in-memory instance.
@@ -40,4 +43,7 @@ public interface IConfigurationManager
 
     /// <summary>Reloads all registered configs from disk.</summary>
     Task ReloadAllAsync();
+
+    /// <summary>Returns the on-disk paths for all registered config files.</summary>
+    IReadOnlyList<string> GetRegisteredFilePaths();
 }

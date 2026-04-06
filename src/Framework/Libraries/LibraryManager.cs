@@ -17,7 +17,6 @@ public sealed class LibraryManager : IDisposable
     private readonly List<LoadedLibrary> _libraries = [];
     private readonly Dictionary<string, ILibrary> _librariesById = new();
     private readonly IEventBus _eventBus;
-    private System.Threading.Timer? _healthCheckTimer;
 
     // Configuration — set by CodeLogicRuntime after loading CodeLogic.json
     public LoggingOptions LoggingOptions { get; set; } = new();
@@ -130,7 +129,11 @@ public sealed class LibraryManager : IDisposable
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
-    public async Task ConfigureAllAsync()
+    public async Task ConfigureAllAsync(
+        bool generateMissingConfigs = true,
+        bool forceGenerateConfigs = false,
+        IReadOnlyCollection<string>? configScopeToIds = null,
+        bool dryRun = false)
     {
         await _lock.WaitAsync();
         try
@@ -145,10 +148,32 @@ public sealed class LibraryManager : IDisposable
                 {
                     var ctx = CreateContext(loaded.Manifest.Id);
                     await loaded.Instance.OnConfigureAsync(ctx);
-                    await ctx.Configuration.GenerateAllDefaultsAsync();
-                    await ctx.Configuration.LoadAllAsync();
-                    await ctx.Localization.GenerateAllTemplatesAsync(SupportedCultures);
-                    await ctx.Localization.LoadAllAsync(SupportedCultures);
+
+                    var shouldApplyConfigGeneration = configScopeToIds == null
+                        || configScopeToIds.Count == 0
+                        || configScopeToIds.Contains(loaded.Manifest.Id, StringComparer.OrdinalIgnoreCase);
+                    var allowMissingConfigs = shouldApplyConfigGeneration && (generateMissingConfigs || forceGenerateConfigs);
+                    var configuration = GetConfigurationManager(ctx);
+
+                    if (dryRun)
+                    {
+                        if (shouldApplyConfigGeneration)
+                            ReportDryRunConfigActions(configuration, forceGenerateConfigs);
+
+                        if (!(forceGenerateConfigs && shouldApplyConfigGeneration))
+                            await configuration.ValidateAllAsync(allowMissingFiles: allowMissingConfigs);
+
+                        await ctx.Localization.LoadAllAsync(SupportedCultures, generateIfMissing: false);
+                    }
+                    else
+                    {
+                        if (forceGenerateConfigs && shouldApplyConfigGeneration)
+                            await ctx.Configuration.GenerateAllDefaultsAsync(force: true);
+
+                        await ctx.Configuration.LoadAllAsync(generateIfMissing: allowMissingConfigs);
+                        await ctx.Localization.GenerateAllTemplatesAsync(SupportedCultures);
+                        await ctx.Localization.LoadAllAsync(SupportedCultures);
+                    }
 
                     loaded.Context = ctx;
                     loaded.State   = LibraryState.Configured;
@@ -237,9 +262,6 @@ public sealed class LibraryManager : IDisposable
 
     public async Task StopAllAsync()
     {
-        _healthCheckTimer?.Dispose();
-        _healthCheckTimer = null;
-
         await _lock.WaitAsync();
         try
         {
@@ -267,16 +289,6 @@ public sealed class LibraryManager : IDisposable
 
     // ── Health checks ────────────────────────────────────────────────────────
 
-    public void StartHealthCheckTimer(int intervalSeconds)
-    {
-        _healthCheckTimer?.Dispose();
-        _healthCheckTimer = new System.Threading.Timer(
-            _ => _ = RunHealthChecksAsync(),
-            null,
-            TimeSpan.FromSeconds(intervalSeconds),
-            TimeSpan.FromSeconds(intervalSeconds));
-    }
-
     public async Task<Dictionary<string, HealthStatus>> GetHealthAsync()
     {
         var results = new Dictionary<string, HealthStatus>();
@@ -292,22 +304,6 @@ public sealed class LibraryManager : IDisposable
             }
         }
         return results;
-    }
-
-    private async Task RunHealthChecksAsync()
-    {
-        try
-        {
-            var results = await GetHealthAsync();
-            foreach (var (id, status) in results)
-            {
-                _eventBus.Publish(new HealthCheckCompletedEvent(id, status.IsHealthy, status.Message));
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[LibraryManager] Health check error: {ex.Message}");
-        }
     }
 
     /// <summary>
@@ -372,6 +368,30 @@ public sealed class LibraryManager : IDisposable
             Events                = _eventBus
         };
     }
+
+    private static ConfigurationManager GetConfigurationManager(LibraryContext context) =>
+        context.Configuration as ConfigurationManager
+        ?? throw new InvalidOperationException(
+            "Library configuration manager must be CodeLogic.Core.Configuration.ConfigurationManager.");
+
+    private static void ReportDryRunConfigActions(ConfigurationManager configuration, bool force)
+    {
+        foreach (var path in configuration.GetRegisteredFilePaths())
+        {
+            if (force)
+            {
+                var action = File.Exists(path) ? "overwrite" : "generate";
+                Console.WriteLine($"[dry-run] Would {action}: {GetDisplayPath(path)}");
+            }
+            else if (!File.Exists(path))
+            {
+                Console.WriteLine($"[dry-run] Would generate: {GetDisplayPath(path)}");
+            }
+        }
+    }
+
+    private static string GetDisplayPath(string path) =>
+        Path.GetRelativePath(AppContext.BaseDirectory, path);
 
     private List<LoadedLibrary> GetOrderedLibraries(bool reverse = false)
     {
@@ -468,7 +488,6 @@ public sealed class LibraryManager : IDisposable
 
     public void Dispose()
     {
-        _healthCheckTimer?.Dispose();
         AppDomain.CurrentDomain.AssemblyResolve -= OnAssemblyResolve;
     }
 }

@@ -52,24 +52,20 @@ public sealed class ConfigurationManager : IConfigurationManager
         await WriteToFileAsync(path, defaultConfig);
     }
 
-    public async Task LoadAsync<T>() where T : ConfigModelBase, new()
+    public async Task LoadAsync<T>(bool generateIfMissing = true) where T : ConfigModelBase, new()
     {
         var path = GetFilePath<T>();
 
         if (!File.Exists(path))
+        {
+            if (!generateIfMissing)
+                throw new FileNotFoundException(
+                    $"Config file for '{typeof(T).Name}' not found at: {path}");
+
             await GenerateDefaultAsync<T>();
+        }
 
-        var json = await File.ReadAllTextAsync(path);
-        var config = JsonSerializer.Deserialize<T>(json, _jsonOptions)
-            ?? throw new InvalidOperationException(
-                $"Failed to deserialize '{typeof(T).Name}' from {path}");
-
-        var validation = config.Validate();
-        if (!validation.IsValid)
-            throw new InvalidOperationException(
-                $"Configuration '{typeof(T).Name}' is invalid: {validation}");
-
-        _loaded[typeof(T)] = config;
+        await LoadExistingAsync<T>();
     }
 
     public async Task SaveAsync<T>(T config) where T : ConfigModelBase, new()
@@ -105,7 +101,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         }
     }
 
-    public async Task LoadAllAsync()
+    public async Task LoadAllAsync(bool generateIfMissing = true)
     {
         foreach (var type in _registered.Keys)
         {
@@ -115,11 +111,29 @@ public sealed class ConfigurationManager : IConfigurationManager
                     $"Reflection failed: method '{nameof(LoadAsync)}' not found.");
 
             var generic = method.MakeGenericMethod(type);
-            var task = generic.Invoke(this, null) as Task
+            var task = generic.Invoke(this, [generateIfMissing]) as Task
                 ?? throw new InvalidOperationException(
                     $"Reflection failed: '{nameof(LoadAsync)}<{type.Name}>' returned null.");
 
             await task;
+        }
+    }
+
+    public async Task ValidateAllAsync(bool allowMissingFiles = false)
+    {
+        foreach (var type in _registered.Keys)
+        {
+            var path = GetFilePath(type);
+            if (!File.Exists(path))
+            {
+                if (allowMissingFiles)
+                    continue;
+
+                throw new FileNotFoundException(
+                    $"Config file for '{type.Name}' not found at: {path}");
+            }
+
+            await LoadExistingAsync(type);
         }
     }
 
@@ -164,15 +178,12 @@ public sealed class ConfigurationManager : IConfigurationManager
         }
     }
 
+    public IReadOnlyList<string> GetRegisteredFilePaths() =>
+        _registered.Keys.Select(GetFilePath).ToList();
+
     private string GetFilePath<T>() where T : ConfigModelBase, new()
     {
-        if (!_registered.TryGetValue(typeof(T), out var subName))
-            throw new InvalidOperationException(
-                $"Configuration type '{typeof(T).Name}' is not registered. " +
-                $"Call Register<{typeof(T).Name}>() in OnConfigureAsync first.");
-
-        var fileName = string.IsNullOrEmpty(subName) ? "config.json" : $"config.{subName}.json";
-        return Path.Combine(_baseDirectory, fileName);
+        return GetFilePath(typeof(T));
     }
 
     private async Task WriteToFileAsync<T>(string path, T config) where T : ConfigModelBase, new()
@@ -183,5 +194,47 @@ public sealed class ConfigurationManager : IConfigurationManager
 
         var json = JsonSerializer.Serialize(config, _jsonOptions);
         await File.WriteAllTextAsync(path, json);
+    }
+
+    private string GetFilePath(Type type)
+    {
+        if (!_registered.TryGetValue(type, out var subName))
+            throw new InvalidOperationException(
+                $"Configuration type '{type.Name}' is not registered. " +
+                $"Call Register<{type.Name}>() in OnConfigureAsync first.");
+
+        var fileName = string.IsNullOrEmpty(subName) ? "config.json" : $"config.{subName}.json";
+        return Path.Combine(_baseDirectory, fileName);
+    }
+
+    private async Task LoadExistingAsync(Type type)
+    {
+        var method = typeof(ConfigurationManager)
+            .GetMethod(nameof(LoadExistingAsync), BindingFlags.NonPublic | BindingFlags.Instance, null, Type.EmptyTypes, null)
+            ?? throw new InvalidOperationException(
+                $"Reflection failed: method '{nameof(LoadExistingAsync)}' not found.");
+
+        var generic = method.MakeGenericMethod(type);
+        var task = generic.Invoke(this, null) as Task
+            ?? throw new InvalidOperationException(
+                $"Reflection failed: '{nameof(LoadExistingAsync)}<{type.Name}>' returned null.");
+
+        await task;
+    }
+
+    private async Task LoadExistingAsync<T>() where T : ConfigModelBase, new()
+    {
+        var path = GetFilePath<T>();
+        var json = await File.ReadAllTextAsync(path);
+        var config = JsonSerializer.Deserialize<T>(json, _jsonOptions)
+            ?? throw new InvalidOperationException(
+                $"Failed to deserialize '{typeof(T).Name}' from {path}");
+
+        var validation = config.Validate();
+        if (!validation.IsValid)
+            throw new InvalidOperationException(
+                $"Configuration '{typeof(T).Name}' is invalid: {validation}");
+
+        _loaded[typeof(T)] = config;
     }
 }

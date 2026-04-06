@@ -51,30 +51,33 @@ CodeLogic/
 ## Lifecycle
 
 ```
-InitializeAsync()       — load CodeLogic.json, validate
-RegisterApplication()   — declare the consuming app
-ConfigureAsync()        — discover/load libraries, run OnConfigureAsync on all
-                          (generates config + localization files)
-StartAsync()            — OnInitializeAsync → OnStartAsync on all
-                          (app starts after libraries)
+InitializeAsync()       - load CodeLogic.json, validate, create LibraryManager
+RegisterApplication()   - declare the consuming app
+ConfigureAsync()        - discover/load libraries, run OnConfigureAsync on app + libraries
+                          (generates/loads config and localization files)
+StartAsync()            - libraries: OnInitializeAsync -> OnStartAsync
+                          application: OnInitializeAsync -> OnStartAsync
 
 --- application runs ---
 
-StopAsync()             — OnStopAsync in reverse order
-                          (app stops before libraries)
+StopAsync()             - application OnStopAsync, unload plugins, then stop libraries
 ```
 
 ## Quick Start
 
 ```csharp
 // Program.cs
-await CodeLogic.InitializeAsync(opts => opts.RootDirectory = "data/codelogic");
+var result = await CodeLogic.InitializeAsync(opts =>
+{
+    opts.FrameworkRootPath = "CodeLogic";
+    opts.AppVersion = "1.0.0";
+});
+if (result.ShouldExit) return;
 
+await Libraries.LoadAsync<SQLiteLibrary>();
 CodeLogic.RegisterApplication(new MyApplication());
 
 await CodeLogic.ConfigureAsync();
-await Libraries.LoadAsync<SQLiteLibrary>();
-await CodeLogic.GetLibraryManager()!.ConfigureAllAsync();
 await CodeLogic.StartAsync();
 
 // ... run your app ...

@@ -19,14 +19,14 @@ public interface ILocalizationManager
     /// <summary>Generates template files for each culture if they don't exist.</summary>
     Task GenerateTemplatesAsync<T>(IReadOnlyList<string> cultures) where T : LocalizationModelBase, new();
 
-    /// <summary>Loads localization files for the given cultures. Merges non-default cultures with the default.</summary>
-    Task LoadAsync<T>(IReadOnlyList<string> cultures) where T : LocalizationModelBase, new();
+    /// <summary>Loads localization files for the given cultures. Generates missing templates only when <paramref name="generateIfMissing"/> is true. Merges non-default cultures with the default.</summary>
+    Task LoadAsync<T>(IReadOnlyList<string> cultures, bool generateIfMissing = true) where T : LocalizationModelBase, new();
 
     /// <summary>Generates templates for all registered types and all cultures.</summary>
     Task GenerateAllTemplatesAsync(IReadOnlyList<string> cultures);
 
-    /// <summary>Loads all registered types for all cultures.</summary>
-    Task LoadAllAsync(IReadOnlyList<string> cultures);
+    /// <summary>Loads all registered types for all cultures. Generates missing templates only when <paramref name="generateIfMissing"/> is true.</summary>
+    Task LoadAllAsync(IReadOnlyList<string> cultures, bool generateIfMissing = true);
 
     /// <summary>
     /// Reloads all localizations from disk. Always safe — pure string data.

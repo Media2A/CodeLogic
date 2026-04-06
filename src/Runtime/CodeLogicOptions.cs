@@ -61,9 +61,10 @@ public sealed class CodeLogicOptions
     public bool ExitAfterGenerate { get; set; } = false;
 
     /// <summary>
-    /// When true, the framework runs only the Configure phase (validates all config files exist
-    /// and are valid) and then exits without starting any libraries or the application.
-    /// Useful for CI/CD pipelines that validate configuration without running the application.
+    /// When true, the framework runs only the Configure phase, validates existing config and
+    /// localization files, prints any config files that would be generated or overwritten, and
+    /// then exits without starting any libraries or the application.
+    /// Useful for CI/CD pipelines that validate startup inputs without mutating the working tree.
     /// Triggered by the <c>--dry-run</c> CLI flag.
     /// </summary>
     public bool DryRun { get; set; } = false;
@@ -95,8 +96,8 @@ public sealed class CodeLogicOptions
         Path.Combine(GetFrameworkPath(), "Framework", "CodeLogic.json");
 
     /// <summary>
-    /// Path to the development config overlay (CodeLogic.Development.json).
-    /// Loaded instead of CodeLogic.json when <see cref="CodeLogicEnvironment.IsDevelopment"/> is true.
+    /// Path to the development config replacement file (CodeLogic.Development.json).
+    /// Loaded instead of CodeLogic.json when the runtime is in development mode.
     /// Add this file to .gitignore — it is per-machine and should never be committed.
     /// </summary>
     public string GetCodeLogicDevelopmentConfigPath() =>

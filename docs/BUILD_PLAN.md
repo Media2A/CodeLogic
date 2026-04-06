@@ -1,5 +1,7 @@
 # CodeLogic 3 — Complete Build Plan
 
+> Historical design document. Some implementation details here may no longer match the current codebase or published documentation.
+
 ## Vision
 
 A modular .NET 10 framework with clean layered architecture:

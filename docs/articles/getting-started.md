@@ -1,169 +1,108 @@
 # Getting Started
 
-This guide walks you through installing CodeLogic 3, understanding the directory layout, and writing your first library and application.
-
----
-
-## Prerequisites
-
-- .NET 10 SDK
-- A console application project (`OutputType=Exe`)
+This guide walks you through installing CodeLogic 3, understanding the boot flow, and writing your first library and application.
 
 ---
 
 ## Installation
 
-CodeLogic 3 is distributed as a source project reference. Clone or reference it:
-
 ```xml
-<!-- YourApp.csproj -->
 <ItemGroup>
   <ProjectReference Include="path/to/CodeLogic/src/CodeLogic.csproj" />
 </ItemGroup>
 ```
 
-Your project must target `net10.0`:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-</Project>
-```
+Target `net10.0` in your host project.
 
 ---
 
-## The 5-Step Boot Sequence
-
-Every CodeLogic application follows the same five steps in `Program.cs`:
+## Boot Sequence
 
 ```csharp
 using CodeLogic;
 
-// Step 1: Initialize
 var result = await CodeLogic.InitializeAsync(o =>
 {
     o.AppVersion = "1.0.0";
-    o.FrameworkRootPath = "CodeLogic";   // optional, this is the default
+    o.FrameworkRootPath = "CodeLogic";
 });
 
-if (result.ShouldExit) return;   // handles --version, --generate-configs, etc.
+if (result.ShouldExit) return;
 
-// Step 2: Register libraries
 await Libraries.LoadAsync<MyDatabaseLibrary>();
-
-// Step 3: Register the application
 CodeLogic.RegisterApplication(new MyApp());
 
-// Step 4: Configure (generates/loads all config and localization files)
 await CodeLogic.ConfigureAsync();
-
-// Step 5: Start
 await CodeLogic.StartAsync();
 
-// Optional: run health check from --health flag
 if (result.RunHealthCheck)
 {
     var report = await CodeLogic.GetHealthAsync();
     Console.WriteLine(report.ToConsoleString());
+    await CodeLogic.StopAsync();
     return;
 }
 
 await Task.Delay(Timeout.Infinite);
 ```
 
-### What each step does
-
 | Step | Method | What happens |
 |------|--------|--------------|
-| 1 | `InitializeAsync` | Parses CLI args, runs first-run scaffold, loads `CodeLogic.json`, creates runtime |
-| 2 | `Libraries.LoadAsync<T>` | Registers library types with the `LibraryManager` |
-| 3 | `RegisterApplication` | Registers your `IApplication` implementation |
-| 4 | `ConfigureAsync` | Calls `OnConfigureAsync` on all components, generates and loads all config files |
-| 5 | `StartAsync` | Calls `OnInitializeAsync` then `OnStartAsync` on all components in order |
+| 1 | `InitializeAsync` | Loads framework config and creates the runtime managers |
+| 2 | `Libraries.LoadAsync<T>` | Registers libraries before configure/start |
+| 3 | `RegisterApplication` | Registers the consuming application |
+| 4 | `ConfigureAsync` | Runs `OnConfigureAsync` on the application and libraries, then generates or loads config/localization files |
+| 5 | `StartAsync` | Initializes and starts libraries first, then the application |
 
 ---
 
 ## First Run
 
-On first run, CodeLogic creates the `CodeLogic/` directory next to your executable and scaffolds the required files:
+On first run, CodeLogic scaffolds the folder structure and keeps starting. Missing config files are generated automatically during `ConfigureAsync()`.
 
-```
-CodeLogic/
-  CodeLogic.json           ← framework configuration
-  logs/                    ← framework-level logs
-  Libraries/               ← one subdirectory per library
-    MyApp.Database/
-      config.database.json ← auto-generated config file (edit and restart)
-      logs/
-      data/
-  Plugins/                 ← plugin directories
-```
+Use `--generate-configs-force` to overwrite existing config files with defaults.
 
-Config files are generated with default values on first run. The application exits with a message instructing you to review and edit them, then restart.
+---
 
-Use `--generate-configs --force` to regenerate configs without exiting, overwriting existing ones.
+## Development Config
+
+`CodeLogic.Development.json` is loaded instead of `CodeLogic.json` when running in a `DEBUG` build or with a debugger attached.
+
+It is a full replacement file, not an overlay. Keep the full schema in that file and add it to `.gitignore`.
 
 ---
 
 ## Your First Library
 
 ```csharp
-using CodeLogic.Core;
-using CodeLogic.Framework;
+using CodeLogic.Core.Configuration;
+using CodeLogic.Framework.Libraries;
 
 public class MyDatabaseLibrary : ILibrary
 {
     public LibraryManifest Manifest => new()
     {
-        Id          = "MyApp.Database",
-        Name        = "Database Library",
-        Version     = "1.0.0",
-        Description = "Manages the application database connection"
+        Id = "CL.MyDatabase",
+        Name = "Database Library",
+        Version = "1.0.0"
     };
 
-    private ILogger _logger = null!;
-    private MyDbConfig _config = null!;
-
-    // Phase 1: Register config and localization models
     public Task OnConfigureAsync(LibraryContext context)
     {
         context.Configuration.Register<MyDbConfig>();
         return Task.CompletedTask;
     }
 
-    // Phase 2: Read config, open connections
-    public async Task OnInitializeAsync(LibraryContext context)
+    public Task OnInitializeAsync(LibraryContext context)
     {
-        _logger = context.Logger;
-        _config = context.Configuration.Get<MyDbConfig>();
-
-        _logger.LogInformation("Connecting to {ConnectionString}", _config.ConnectionString);
-        // open connection pool, validate schema, etc.
-    }
-
-    // Phase 3: Start background tasks
-    public Task OnStartAsync(LibraryContext context)
-    {
-        _logger.LogInformation("Database library started");
+        var config = context.Configuration.Get<MyDbConfig>();
+        context.Logger.Info($"Connection string length={config.ConnectionString.Length}");
         return Task.CompletedTask;
     }
 
-    // Phase 4: Graceful shutdown
-    public Task OnStopAsync()
-    {
-        _logger.LogInformation("Database library stopping");
-        // close connections, flush, release
-        return Task.CompletedTask;
-    }
-
-    public Task<HealthStatus> HealthCheckAsync()
-        => Task.FromResult(HealthStatus.Healthy("Connected"));
-
+    public Task OnStartAsync(LibraryContext context) => Task.CompletedTask;
+    public Task OnStopAsync() => Task.CompletedTask;
+    public Task<HealthStatus> HealthCheckAsync() => Task.FromResult(HealthStatus.Healthy("Connected"));
     public void Dispose() { }
 }
 ```
@@ -172,90 +111,58 @@ public class MyDatabaseLibrary : ILibrary
 
 ## Your First Application
 
-Your application implements `IApplication` — it is the centrepiece of a CodeLogic host. Unlike libraries, it always starts **after** all libraries are fully running, so it can safely access any library service from `OnInitializeAsync` onwards.
-
 ```csharp
+using CodeLogic.Core.Configuration;
 using CodeLogic.Framework.Application;
-using CodeLogic.Framework.Libraries;
 
 public class MyApp : IApplication
 {
     public ApplicationManifest Manifest => new()
     {
-        Id      = "MyApp",
-        Name    = "My Application",
+        Id = "MyApp",
+        Name = "My Application",
         Version = "1.0.0"
     };
 
-    private ApplicationContext _ctx = null!;
-
-    // Phase 1: register config models (called during ConfigureAsync)
     public Task OnConfigureAsync(ApplicationContext context)
     {
         context.Configuration.Register<MyAppConfig>();
         return Task.CompletedTask;
     }
 
-    // Phase 2: libraries are fully running — set up your services
-    public async Task OnInitializeAsync(ApplicationContext context)
+    public Task OnInitializeAsync(ApplicationContext context)
     {
-        _ctx = context;  // keep a reference for OnStopAsync
-
         var config = context.Configuration.Get<MyAppConfig>();
-
-        // Access any fully-started library service
-        var db = Libraries.Get<MyDatabaseLibrary>();
-
-        context.Logger.Info($"Initialized — db ready: {db != null}");
-        await Task.CompletedTask;
-    }
-
-    // Phase 3: subscribe to events, start background work
-    public Task OnStartAsync(ApplicationContext context)
-    {
-        context.Events.Subscribe<MyEvent>(e =>
-            context.Logger.Info($"Received event: {e}"));
-
-        context.Logger.Info("Application started");
+        context.Logger.Info($"Configured name={config.Name}");
         return Task.CompletedTask;
     }
 
-    // Phase 4: clean up before libraries stop
-    public Task OnStopAsync()
-    {
-        _ctx.Logger.Info("Application stopping");
-        return Task.CompletedTask;
-    }
-
-    public Task<HealthStatus> HealthCheckAsync()
-        => Task.FromResult(HealthStatus.Healthy("Running"));
+    public Task OnStartAsync(ApplicationContext context) => Task.CompletedTask;
+    public Task OnStopAsync() => Task.CompletedTask;
+    public Task<HealthStatus> HealthCheckAsync() => Task.FromResult(HealthStatus.Healthy("Running"));
 }
 ```
-
-> See [Application Lifecycle](application-lifecycle.md) for a full explanation of `IApplication`, `ApplicationContext`, plugins, and the exact startup ordering.
 
 ---
 
 ## CLI Flags
 
-CodeLogic provides built-in CLI flags:
-
 | Flag | Description |
 |------|-------------|
 | `--version` | Print version and exit |
-| `--info` | Print framework and library info |
-| `--health` | Run health checks and print report |
-| `--generate-configs` | Generate missing config files and exit |
-| `--generate-configs --force` | Regenerate all config files (overwrites) |
-| `--dry-run` | Initialize and configure only, do not start |
+| `--info` | Print runtime info and exit |
+| `--health` | Run a health check after startup |
+| `--generate-configs` | Generate missing config files before startup continues |
+| `--generate-configs-force` | Overwrite existing config files with defaults |
+| `--dry-run` | Run configure only, validate startup inputs, and do not write files |
 
 ---
 
 ## Next Steps
 
-- [Library Lifecycle](library-lifecycle.md) — the 4 phases explained in depth
-- [Configuration](configuration.md) — config models and file naming
-- [Localization](localization.md) — locale files and culture fallback
-- [Event Bus](event-bus.md) — publish and subscribe to events
-- [Health Checks](health-checks.md) — implementing and querying health
-- [Plugins](plugins.md) — hot-reloadable plugin system
+- [Library Lifecycle](library-lifecycle.md)
+- [Configuration](configuration.md)
+- [Localization](localization.md)
+- [Event Bus](event-bus.md)
+- [Health Checks](health-checks.md)
+- [Plugins](plugins.md)

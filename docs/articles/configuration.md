@@ -156,7 +156,7 @@ Use the `--generate-configs` flag to generate without starting:
 Use `--force` to regenerate even if files already exist:
 
 ```bash
-./MyApp --generate-configs --force
+./MyApp --generate-configs-force
 ```
 
 ---
