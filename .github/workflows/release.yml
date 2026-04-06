@@ -1,0 +1,89 @@
+name: Build And Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'samples/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codelogic-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Compute version metadata
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$proj = Get-Content 'src/CodeLogic.csproj'
+          $baseVersion = ($proj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+          if ([string]::IsNullOrWhiteSpace($baseVersion)) {
+            throw "Could not read <Version> from src/CodeLogic.csproj"
+          }
+
+          $timestamp = Get-Date -Format 'yyyyMMdd.HHmmss'
+          $buildVersion = "$baseVersion-build.$timestamp.${env:GITHUB_RUN_NUMBER}"
+          $tag = "v$buildVersion"
+
+          "base_version=$baseVersion" >> $env:GITHUB_OUTPUT
+          "timestamp=$timestamp" >> $env:GITHUB_OUTPUT
+          "build_version=$buildVersion" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore src/CodeLogic.csproj
+
+      - name: Build
+        run: dotnet build src/CodeLogic.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.build_version }} /p:InformationalVersion=${{ steps.version.outputs.build_version }}
+
+      - name: Pack
+        run: dotnet pack src/CodeLogic.csproj --configuration Release --no-build --output artifacts /p:PackageVersion=${{ steps.version.outputs.build_version }} /p:Version=${{ steps.version.outputs.build_version }} /p:InformationalVersion=${{ steps.version.outputs.build_version }}
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+
+          $runtimeZip = "artifacts/CodeLogic-${{ steps.version.outputs.build_version }}.zip"
+          Compress-Archive -Path 'src/bin/Release/net10.0/*' -DestinationPath $runtimeZip -Force
+
+          @"
+          CodeLogic release
+
+          Base version: ${{ steps.version.outputs.base_version }}
+          Build version: ${{ steps.version.outputs.build_version }}
+          Commit: ${{ github.sha }}
+          "@ | Set-Content 'artifacts/release-notes.md'
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: CodeLogic ${{ steps.version.outputs.build_version }}
+          body_path: artifacts/release-notes.md
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            artifacts/*.nupkg
+            artifacts/*.zip
