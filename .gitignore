@@ -14,3 +14,4 @@ data/
 **/CodeLogic.Development.json
 .DS_Store
 Thumbs.db
+docs-output/

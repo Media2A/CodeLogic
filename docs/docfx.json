@@ -1,0 +1,46 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "files": ["src/CodeLogic.csproj"],
+          "src": "../"
+        }
+      ],
+      "dest": "api",
+      "disableGitFeatures": false,
+      "disableDefaultFilter": false
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": ["api/**.yml", "api/index.md"]
+      },
+      {
+        "files": ["articles/**.md", "articles/**/toc.yml", "toc.yml", "index.md"]
+      }
+    ],
+    "resource": [
+      {
+        "files": ["images/**"]
+      }
+    ],
+    "dest": "../docs-output",
+    "globalMetadata": {
+      "_appTitle": "CodeLogic 3",
+      "_appLogoPath": "images/logo.png",
+      "_appFaviconPath": "images/favicon.ico",
+      "_enableSearch": true,
+      "_appFooter": "Copyright &copy; 2026 Media2A. Built with <a href='https://dotnet.github.io/docfx'>DocFX</a>.",
+      "_appName": "CodeLogic 3"
+    },
+    "template": ["default", "modern"],
+    "sitemap": {
+      "baseUrl": "https://media2a.github.io/CodeLogic"
+    },
+    "xref": [],
+    "exportRawModel": false,
+    "exportViewModel": false
+  }
+}
