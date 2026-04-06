@@ -1,7 +1,10 @@
 using CodeLogic;
+using CodeLogic.Core.Configuration;
 using CodeLogic.Core.Events;
 using CodeLogic.Demo.Web.Application;
 using CodeLogic.Demo.Web.Endpoints;
+using CodeLogic.Demo.Web.Plugins;
+using CodeLogic.Framework.Application.Plugins;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Program.cs — Entry point. Boot sequence + host configuration only.
@@ -36,6 +39,18 @@ CodeLogic.CodeLogic.RegisterApplication(new WebDemoApplication());
 await CodeLogic.CodeLogic.ConfigureAsync();
 await CodeLogic.CodeLogic.StartAsync();
 
+// ── Step 3b: Load plugins ─────────────────────────────────────────────────
+// Create a PluginManager wired to the shared event bus, load in-process
+// plugins, register with the runtime for health + graceful shutdown.
+var pluginMgr = new PluginManager(
+    CodeLogic.CodeLogic.GetEventBus(),
+    new PluginOptions { PluginsDirectory = "data/plugins", EnableHotReload = false });
+
+await LoadInProcessPluginAsync(pluginMgr, new RequestLoggerPlugin());
+await LoadInProcessPluginAsync(pluginMgr, new NotificationPlugin());
+
+CodeLogic.CodeLogic.SetPluginManager(pluginMgr);
+
 // ── Step 4: Build the ASP.NET host ────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +76,7 @@ var app = builder.Build();
 HomeEndpoints.Map(app);
 HealthEndpoints.Map(app);
 EventEndpoints.Map(app);
+PluginEndpoints.Map(app);
 
 // ── Step 7: Wire CodeLogic shutdown to ASP.NET host lifetime ─────────────
 // When the host stops (CTRL+C, SIGTERM, etc.), stop CodeLogic gracefully.
@@ -70,3 +86,36 @@ lifetime.ApplicationStopping.Register(() =>
 
 // ── Step 8: Run ───────────────────────────────────────────────────────────
 app.Run();
+
+
+// ── Helper: load an in-process plugin through the full 4-phase lifecycle ──
+static async Task LoadInProcessPluginAsync(PluginManager manager, IPlugin plugin)
+{
+    var ctx = CodeLogic.CodeLogic.GetApplicationContext()
+        ?? throw new InvalidOperationException("Application context not available.");
+
+    var pluginDir = Path.Combine("data/plugins", plugin.Manifest.Id);
+    Directory.CreateDirectory(Path.Combine(pluginDir, "logs"));
+
+    var pluginCtx = new PluginContext
+    {
+        PluginId              = plugin.Manifest.Id,
+        PluginDirectory       = pluginDir,
+        ConfigDirectory       = pluginDir,
+        LocalizationDirectory = Path.Combine(pluginDir, "localization"),
+        LogsDirectory         = Path.Combine(pluginDir, "logs"),
+        DataDirectory         = Path.Combine(pluginDir, "data"),
+        Logger                = ctx.Logger,
+        Configuration         = new CodeLogic.Core.Configuration.ConfigurationManager(pluginDir),
+        Localization          = ctx.Localization,
+        Events                = ctx.Events
+    };
+
+    await plugin.OnConfigureAsync(pluginCtx);
+    await pluginCtx.Configuration.GenerateAllDefaultsAsync();
+    await pluginCtx.Configuration.LoadAllAsync();
+    await plugin.OnInitializeAsync(pluginCtx);
+    await plugin.OnStartAsync(pluginCtx);
+
+    Console.WriteLine($"[Plugins] {plugin.Manifest.Name} loaded and started");
+}

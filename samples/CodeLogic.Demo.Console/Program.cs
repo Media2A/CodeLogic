@@ -3,6 +3,8 @@ using CodeLogic.Demo.Console.Application;
 using CodeLogic.Demo.Console.Config;
 using CodeLogic.Demo.Console.Events;
 using CodeLogic.Demo.Console.Localization;
+using CodeLogic.Demo.Console.Plugins;
+using CodeLogic.Framework.Application.Plugins;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Program.cs — Entry point. Boot sequence + main loop only.
@@ -40,13 +42,25 @@ await CodeLogic.CodeLogic.ConfigureAsync();
 // Runs Configure → Initialize → Start on all libs, then Initialize → Start on app.
 await CodeLogic.CodeLogic.StartAsync();
 
-// ── Optional: register a PluginManager ────────────────────────────────────
-// Uncomment to enable plugin support. The PluginManager will participate in
-// health checks and graceful shutdown automatically.
+// ── Step 6: Create PluginManager + load in-process plugins ────────────────
+// In a real app, plugins would be DLL files in a Plugins/ folder loaded
+// via pluginMgr.LoadAllAsync(). In this demo we load them directly as
+// in-process classes using LoadInProcessAsync() so the demo is self-contained.
 //
-// var pluginMgr = new PluginManager(CodeLogic.CodeLogic.GetEventBus());
-// await pluginMgr.LoadAllAsync();
-// CodeLogic.CodeLogic.SetPluginManager(pluginMgr);
+// The PluginManager is wired to the shared event bus so plugins can pub/sub
+// with the rest of the app. It is registered with the runtime for health
+// checks and graceful shutdown.
+
+var pluginMgr = new PluginManager(
+    CodeLogic.CodeLogic.GetEventBus(),
+    new PluginOptions { PluginsDirectory = "data/plugins", EnableHotReload = false });
+
+// Load our demo plugins directly (no separate DLL needed for in-process plugins)
+await LoadInProcessPluginAsync(pluginMgr, new GreetingPlugin());
+await LoadInProcessPluginAsync(pluginMgr, new StatsPlugin());
+
+// Register with the runtime — health checks + graceful shutdown
+CodeLogic.CodeLogic.SetPluginManager(pluginMgr);
 
 // ── Handle --health CLI flag ───────────────────────────────────────────────
 // If the user ran: myapp --health
@@ -84,9 +98,10 @@ using var workSub = bus.Subscribe<WorkCompletedEvent>(e =>
 });
 
 Console.WriteLine("Commands:");
-Console.WriteLine("  [W] Simulate work   (logs Info/Warning to application.log)");
+Console.WriteLine("  [W] Simulate work   (triggers GreetingPlugin + StatsPlugin)");
 Console.WriteLine("  [L] Log all levels  (shows what writes to disk vs filtered)");
-Console.WriteLine("  [H] Health report");
+Console.WriteLine("  [H] Health report   (includes plugin health)");
+Console.WriteLine("  [P] Plugin status   (list loaded plugins)");
 Console.WriteLine("  [Q] Quit");
 Console.WriteLine();
 
@@ -131,6 +146,16 @@ while (running)
             Console.WriteLine(health.ToConsoleString());
             break;
 
+        case ConsoleKey.P:
+            // List all loaded plugins and their state
+            var pm = CodeLogic.CodeLogic.GetPluginManager();
+            if (pm == null) { Console.WriteLine("  No plugin manager registered."); break; }
+            Console.WriteLine("\n  Loaded plugins:");
+            foreach (var p in pm.GetLoadedPlugins())
+                Console.WriteLine($"    [{p.State,-12}] {p.Manifest.Name} v{p.Manifest.Version} — {p.Manifest.Description}");
+            Console.WriteLine();
+            break;
+
         case ConsoleKey.Q:
             running = false;
             break;
@@ -138,4 +163,43 @@ while (running)
 }
 
 // ── Graceful shutdown ──────────────────────────────────────────────────────
+// StopAsync() handles: app → plugins (via PluginManager) → libraries
 await CodeLogic.CodeLogic.StopAsync();
+
+
+// ── Helper: load an in-process plugin through the full 4-phase lifecycle ──
+// Normally PluginManager loads plugins from separate DLL files.
+// This helper lets us run in-process plugin classes through the same lifecycle
+// so the demo is self-contained without needing extra projects/DLLs.
+static async Task LoadInProcessPluginAsync(PluginManager manager, IPlugin plugin)
+{
+    var ctx = CodeLogic.CodeLogic.GetApplicationContext()
+        ?? throw new InvalidOperationException("Application context not available.");
+
+    // Build a PluginContext that reuses the app's paths/services
+    var pluginDir = Path.Combine("data/plugins", plugin.Manifest.Id);
+    Directory.CreateDirectory(pluginDir);
+
+    var pluginCtx = new PluginContext
+    {
+        PluginId              = plugin.Manifest.Id,
+        PluginDirectory       = pluginDir,
+        ConfigDirectory       = pluginDir,
+        LocalizationDirectory = Path.Combine(pluginDir, "localization"),
+        LogsDirectory         = Path.Combine(pluginDir, "logs"),
+        DataDirectory         = Path.Combine(pluginDir, "data"),
+        Logger                = ctx.Logger,   // share app logger for demo simplicity
+        Configuration         = new CodeLogic.Core.Configuration.ConfigurationManager(pluginDir),
+        Localization          = ctx.Localization,
+        Events                = ctx.Events
+    };
+
+    // Run the 4-phase lifecycle manually
+    await plugin.OnConfigureAsync(pluginCtx);
+    await pluginCtx.Configuration.GenerateAllDefaultsAsync();
+    await pluginCtx.Configuration.LoadAllAsync();
+    await plugin.OnInitializeAsync(pluginCtx);
+    await plugin.OnStartAsync(pluginCtx);
+
+    Console.WriteLine($"  [Plugins] {plugin.Manifest.Name} loaded and started");
+}
