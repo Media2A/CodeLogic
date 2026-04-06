@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CodeLogic.csproj" />
-    <ProjectReference Include="..\..\..\CL.WebLogic\src\CL.WebLogic.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -10,11 +9,5 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Update="theme\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
 
 </Project>
