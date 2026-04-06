@@ -102,6 +102,22 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             _frameworkLogger.Info($"  Root     : {GetOptionsOrThrow().GetFrameworkPath()}");
             _frameworkLogger.Info($"  App path : {GetOptionsOrThrow().GetApplicationPath()}");
 
+            // Create LibraryManager eagerly so Libraries.LoadAsync<T>() can be called
+            // right after InitializeAsync — before ConfigureAsync. This is the clean
+            // pattern: register all libs first, then Configure + Start in one go.
+            var cfg = GetConfigOrThrow();
+            var opt = GetOptionsOrThrow();
+            _libraryManager = new LibraryManager(_eventBus)
+            {
+                LoggingOptions             = cfg.Logging.ToLoggingOptions(),
+                FrameworkRootPath          = opt.GetFrameworkPath(),
+                DefaultCulture             = cfg.Localization.DefaultCulture,
+                SupportedCultures          = cfg.Localization.SupportedCultures,
+                EnableDependencyResolution = cfg.Libraries.EnableDependencyResolution,
+                LibraryDiscoveryPattern    = cfg.Libraries.DiscoveryPattern
+            };
+            _frameworkLogger.Info("Library manager created — ready for Libraries.LoadAsync<T>()");
+
             _initialized = true;
 
             // Register shutdown signals
@@ -164,19 +180,10 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             if (!validation.IsSuccess)
                 throw new InvalidOperationException($"Startup validation failed: {validation.ErrorMessage}");
 
-            // Create library manager
-            _libraryManager = new LibraryManager(_eventBus)
-            {
-                LoggingOptions             = config.Logging.ToLoggingOptions(),
-                FrameworkRootPath          = opts.GetFrameworkPath(),
-                DefaultCulture             = config.Localization.DefaultCulture,
-                SupportedCultures          = config.Localization.SupportedCultures,
-                EnableDependencyResolution = config.Libraries.EnableDependencyResolution,
-                LibraryDiscoveryPattern    = config.Libraries.DiscoveryPattern
-            };
-
-            // Discover + load DLL-based libraries (if any)
-            var discovered = _libraryManager.Discover();
+            // Discover + load DLL-based libraries (if any).
+            // LibraryManager was already created in InitializeAsync so that
+            // Libraries.LoadAsync<T>() could be called between Init and Configure.
+            var discovered = _libraryManager!.Discover();
             if (discovered.Count > 0)
                 await _libraryManager.LoadLibrariesAsync(discovered);
 

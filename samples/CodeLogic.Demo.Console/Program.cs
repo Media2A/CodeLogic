@@ -23,9 +23,21 @@ if (!initResult.Success || initResult.ShouldExit)
     return;
 }
 
-// ── Step 2: Register + Configure + Start ──────────────────────────────────
+// ── Step 2: Register libraries (BEFORE ConfigureAsync) ────────────────────
+// LibraryManager is ready after InitializeAsync. Register all libs here.
+// Example — uncomment when you have a CL.SQLite reference:
+//   await Libraries.LoadAsync<CL.SQLite.SQLiteLibrary>();
+//   await Libraries.LoadAsync<CL.Mail.MailLibrary>();
+
+// ── Step 3: Register the application ──────────────────────────────────────
 CodeLogic.CodeLogic.RegisterApplication(new DemoApplication());
+
+// ── Step 4: Configure ─────────────────────────────────────────────────────
+// Discovers DLL libs, configures all registered libs + app in dependency order.
 await CodeLogic.CodeLogic.ConfigureAsync();
+
+// ── Step 5: Start ─────────────────────────────────────────────────────────
+// Runs Configure → Initialize → Start on all libs, then Initialize → Start on app.
 await CodeLogic.CodeLogic.StartAsync();
 
 // ── Optional: register a PluginManager ────────────────────────────────────

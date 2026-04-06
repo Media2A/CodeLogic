@@ -17,7 +17,9 @@ public static class Libraries
     public static async Task<bool> LoadAsync<T>() where T : class, ILibrary, new()
     {
         var mgr = CodeLogic.GetLibraryManager()
-            ?? throw new InvalidOperationException("Library manager not available. Call ConfigureAsync() first.");
+            ?? throw new InvalidOperationException(
+                "Library manager not available. Call InitializeAsync() first, " +
+                "then register libraries before ConfigureAsync().");
         return await mgr.LoadLibraryAsync<T>();
     }
 
