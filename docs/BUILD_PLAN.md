@@ -246,47 +246,145 @@ public class LoggingOptions
 Decoupled in-process pub/sub. Libraries, apps, and plugins communicate
 without direct references. No external broker dependency.
 
+One `EventBus` instance is created by `CodeLogicRuntime` and injected into
+every context (`LibraryContext`, `ApplicationContext`, `PluginContext`) so all
+components share the same bus.
+
 **Files:**
-- `IEvent.cs` — marker interface
-- `IEventBus.cs`
+- `IEvent.cs` — marker interface (empty, just for type constraint)
+- `IEventBus.cs` — interface
 - `EventBus.cs` — thread-safe implementation
 - `EventSubscription.cs` — disposable subscription handle
+- `FrameworkEvents.cs` — all built-in framework event types
 
-**Built-in framework events (published by the framework itself):**
+---
+
+#### Event ownership — Option A+B combined
+
+**Where event types live determines what references are needed:**
+
+| Scenario | Event lives in | Reference needed |
+|----------|---------------|-----------------|
+| Framework → any component | `CodeLogic.Core.Events` (FrameworkEvents.cs) | None — always available |
+| Lib → App | The lib (e.g. `CL.SQLite`) | App already refs the lib ✓ |
+| App → Lib | The app | Lib never refs app ✓ |
+| Lib → Lib (cross-lib) | `CodeLogic.Core.Events` (generic bridge events) | None needed ✓ |
+
+**Rule:** If an event needs to cross a reference boundary (lib-to-lib, or
+lib-to-unknown-consumer), use a framework bridge event. If the consumer
+already references the publisher, use a typed event in the publisher.
+
+---
+
+#### Built-in framework events (`FrameworkEvents.cs` in Core)
+
+These are published **by the framework itself** and by libs that need to
+communicate across reference boundaries:
+
 ```csharp
-// Lifecycle
-record LibraryStartedEvent(string LibraryId) : IEvent;
-record LibraryStoppedEvent(string LibraryId) : IEvent;
-record LibraryFailedEvent(string LibraryId, Exception Error) : IEvent;
-record PluginLoadedEvent(string PluginId) : IEvent;
-record PluginUnloadedEvent(string PluginId) : IEvent;
+// ── Lifecycle ──────────────────────────────────────────────────────
+record LibraryStartedEvent(string LibraryId, string LibraryName) : IEvent;
+record LibraryStoppedEvent(string LibraryId, string LibraryName) : IEvent;
+record LibraryFailedEvent(string LibraryId, string LibraryName, Exception Error) : IEvent;
+record PluginLoadedEvent(string PluginId, string PluginName) : IEvent;
+record PluginUnloadedEvent(string PluginId, string PluginName) : IEvent;
+record PluginFailedEvent(string PluginId, string PluginName, Exception Error) : IEvent;
 
-// Config
+// ── Config / Localization ───────────────────────────────────────────
 record ConfigReloadedEvent(string ComponentId, Type ConfigType) : IEvent;
 record LocalizationReloadedEvent(string ComponentId) : IEvent;
 
-// Health
+// ── Health ──────────────────────────────────────────────────────────
 record HealthCheckCompletedEvent(HealthReport Report) : IEvent;
 
-// Shutdown
+// ── Shutdown ────────────────────────────────────────────────────────
 record ShutdownRequestedEvent(string Reason) : IEvent;
+
+// ── Generic bridge — for lib-to-lib communication ───────────────────
+// Libs publish this when they need to signal something to unknown consumers
+// without requiring those consumers to reference them.
+// Use ComponentId + AlertType to scope:  "cl.sqlite" + "connection.lost"
+record ComponentAlertEvent(
+    string ComponentId,    // "cl.sqlite"
+    string AlertType,      // "connection.lost", "pool.exhausted", etc.
+    string Message,        // human-readable
+    object? Payload = null // optional structured data
+) : IEvent;
 ```
 
-**Usage:**
+---
+
+#### Lib-specific events (defined in the lib)
+
+Each lib defines its own strongly-typed events for consumers that already
+reference it. Example in `CL.SQLite`:
+
 ```csharp
-// Publish
-context.Events.Publish(new DatabaseConnectionLost("cl.sqlite", "main"));
+// CL.SQLite/Events/SQLiteEvents.cs
+namespace CL.SQLite.Events;
 
-// Subscribe (sync)
-var sub = context.Events.Subscribe<DatabaseConnectionLost>(e =>
-    logger.Warning($"DB lost: {e.ConnectionId}"));
+public record ConnectionAcquiredEvent(string DatabasePath, TimeSpan WaitTime) : IEvent;
+public record SlowQueryEvent(string Sql, TimeSpan Duration) : IEvent;
+public record MigrationAppliedEvent(string MigrationId) : IEvent;
+```
 
-// Subscribe (async)
-var sub = context.Events.SubscribeAsync<UserLoggedIn>(async e =>
-    await auditService.LogAsync(e.UserId));
+The lib publishes both its own typed event AND a framework bridge event:
+```csharp
+// In CL.SQLite — connection lost scenario:
+context.Events.Publish(new ConnectionLostEvent(config.DatabasePath));       // typed (for app)
+context.Events.Publish(new ComponentAlertEvent(                             // bridge (for any lib)
+    "cl.sqlite", "connection.lost", $"Lost connection to {config.DatabasePath}"));
+```
 
-// Unsubscribe
+---
+
+#### Usage patterns
+
+```csharp
+// ── App subscribing to lib events (app refs CL.SQLite) ─────────────
+using CL.SQLite.Events;
+var sub = context.Events.Subscribe<SlowQueryEvent>(e =>
+    logger.Warning($"Slow query ({e.Duration.TotalMs}ms): {e.Sql}"));
+
+// ── Lib subscribing to framework events (no extra reference) ────────
+var sub = context.Events.Subscribe<ShutdownRequestedEvent>(e =>
+    CloseConnections());
+
+// ── Lib-to-lib via bridge event (no cross reference) ────────────────
+var sub = context.Events.Subscribe<ComponentAlertEvent>(e => {
+    if (e.ComponentId == "cl.sqlite" && e.AlertType == "connection.lost")
+        PauseEmailQueue();
+});
+
+// ── Async subscribe ──────────────────────────────────────────────────
+var sub = context.Events.SubscribeAsync<LibraryFailedEvent>(async e =>
+    await notificationService.AlertAsync($"{e.LibraryName} failed: {e.Error.Message}"));
+
+// ── Unsubscribe (IDisposable) ────────────────────────────────────────
 sub.Dispose();
+```
+
+---
+
+#### `IEventBus` interface
+
+```csharp
+public interface IEventBus
+{
+    // Publish (fire and don't wait for async subscribers)
+    void Publish<T>(T @event) where T : IEvent;
+
+    // Publish and wait for all async subscribers to complete
+    Task PublishAsync<T>(T @event) where T : IEvent;
+
+    // Subscribe synchronously
+    IEventSubscription Subscribe<T>(Action<T> handler) where T : IEvent;
+
+    // Subscribe asynchronously
+    IEventSubscription SubscribeAsync<T>(Func<T, Task> handler) where T : IEvent;
+}
+
+public interface IEventSubscription : IDisposable { }
 ```
 
 ---
