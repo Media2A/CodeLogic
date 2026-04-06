@@ -1,3 +1,6 @@
+using CL.WebLogic;
+using CL.WebLogic.Runtime;
+using CodeLogic;
 using CodeLogic.Demo.Web.Config;
 using CodeLogic.Demo.Web.Events;
 using CodeLogic.Demo.Web.Localization;
@@ -5,86 +8,116 @@ using CodeLogic.Framework.Application;
 
 namespace CodeLogic.Demo.Web.Application;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// The consuming application — implements IApplication for the web demo.
-//
-// Logging:
-//   context.Logger writes to: data/app/logs/application.log
-//   Log level from:           CodeLogic.Development.json (debugger) or CodeLogic.json
-// ─────────────────────────────────────────────────────────────────────────────
-
 public class WebDemoApplication : IApplication
 {
     public ApplicationManifest Manifest { get; } = new()
     {
-        Id          = "demo.web",
-        Name        = "CodeLogic Web Demo",
-        Version     = "1.0.0",
-        Description = "Reference implementation showing CodeLogic + ASP.NET Core",
-        Author      = "CodeLogic"
+        Id = "demo.web",
+        Name = "CodeLogic Web Demo",
+        Version = "1.0.0",
+        Description = "Reference implementation showing CodeLogic + CL.WebLogic",
+        Author = "CodeLogic"
     };
 
-    // ── Phase 1: Configure ────────────────────────────────────────────────
-    public async Task OnConfigureAsync(ApplicationContext context)
+    private ApplicationContext? _context;
+    private WebConfig _config = new();
+
+    public Task OnConfigureAsync(ApplicationContext context)
     {
         context.Configuration.Register<WebConfig>();
         context.Localization.Register<WebStrings>();
-
-        context.Logger.Trace("OnConfigureAsync: registered WebConfig and WebStrings");
-        context.Logger.Debug($"OnConfigureAsync: config dir = {context.ConfigDirectory}");
         context.Logger.Info($"{Manifest.Name} configured");
-
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    // ── Phase 2: Initialize ───────────────────────────────────────────────
-    public async Task OnInitializeAsync(ApplicationContext context)
+    public Task OnInitializeAsync(ApplicationContext context)
     {
-        var config = context.Configuration.Get<WebConfig>();
-
-        context.Logger.Trace("OnInitializeAsync: reading WebConfig");
-        context.Logger.Debug($"OnInitializeAsync: SiteTitle='{config.SiteTitle}', " +
-                             $"DefaultLanguage='{config.DefaultLanguage}', " +
-                             $"DetailedErrors={config.DetailedErrors}");
-        context.Logger.Info($"{Manifest.Name} initialized");
-
-        await Task.CompletedTask;
+        _context = context;
+        _config = context.Configuration.Get<WebConfig>();
+        context.Logger.Info($"{Manifest.Name} initialized for site '{_config.SiteTitle}'");
+        return Task.CompletedTask;
     }
 
-    // ── Phase 3: Start ────────────────────────────────────────────────────
-    public async Task OnStartAsync(ApplicationContext context)
+    public Task OnStartAsync(ApplicationContext context)
     {
-        context.Logger.Debug("OnStartAsync: subscribing to events");
+        var web = Libraries.Get<WebLogicLibrary>()
+            ?? throw new InvalidOperationException("CL.WebLogic is required for the demo web app.");
 
-        // Log every incoming request (Trace — very verbose)
-        context.Events.Subscribe<RequestReceivedEvent>(e =>
-            context.Logger.Trace($"Request: {e.Method} {e.Path}" +
-                                 (e.UserId != null ? $" user={e.UserId}" : "")));
+        context.Events.Subscribe<WebRequestHandledEvent>(e =>
+            context.Logger.Trace($"[{e.StatusCode}] {e.Method} {e.Path} in {e.DurationMs}ms"));
 
-        // Log app notifications at appropriate level based on severity
         context.Events.Subscribe<AppNotificationEvent>(e =>
         {
             var msg = $"Notification [{e.Severity}] {e.Title}: {e.Message}";
             switch (e.Severity.ToLowerInvariant())
             {
-                case "error":    context.Logger.Error(msg);   break;
+                case "error":
+                    context.Logger.Error(msg);
+                    break;
                 case "warn":
-                case "warning":  context.Logger.Warning(msg); break;
-                default:         context.Logger.Info(msg);    break;
+                case "warning":
+                    context.Logger.Warning(msg);
+                    break;
+                default:
+                    context.Logger.Info(msg);
+                    break;
             }
         });
 
+        web.RegisterPage("/", _ => Task.FromResult(WebResult.Template(
+            "templates/home.html",
+            new Dictionary<string, object?>
+            {
+                ["title"] = _config.SiteTitle,
+                ["subtitle"] = "CL.WebLogic is owning the request pipeline now.",
+                ["description"] = "The page is rendered from the theme folder, while the app and plugins register routes through CodeLogic3."
+            })), "GET");
+
+        web.RegisterApi("/api/health", _ => Task.FromResult(WebResult.Json(new
+        {
+            ok = true,
+            site = _config.SiteTitle,
+            runtime = "CL.WebLogic"
+        })), "GET");
+
+        web.RegisterApi("/api/events/trigger", async request =>
+        {
+            var form = await request.ReadFormAsync().ConfigureAwait(false);
+            var severity = form.GetValueOrDefault("severity", "info");
+            var title = form.GetValueOrDefault("title", "Manual event");
+            var message = form.GetValueOrDefault("message", "Triggered through CL.WebLogic");
+
+            context.Events.Publish(new AppNotificationEvent(title, message, severity));
+            return WebResult.Json(new
+            {
+                accepted = true,
+                severity,
+                title,
+                message
+            });
+        }, "POST");
+
+        web.RegisterFallback(_ => Task.FromResult(WebResult.Template(
+            "templates/not-found.html",
+            new Dictionary<string, object?>
+            {
+                ["title"] = _config.SiteTitle,
+                ["path"] = "The requested route was not registered."
+            },
+            statusCode: 404)), "GET", "POST");
+
         context.Events.Publish(new AppNotificationEvent(
-            "Startup", $"{Manifest.Name} is ready to handle requests", "info"));
+            "Startup",
+            $"{Manifest.Name} is ready to handle requests through CL.WebLogic",
+            "info"));
 
         context.Logger.Info($"{Manifest.Name} started");
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    // ── Phase 4: Stop ─────────────────────────────────────────────────────
-    public async Task OnStopAsync()
+    public Task OnStopAsync()
     {
-        Console.WriteLine($"[{Manifest.Name}] Stopping gracefully...");
-        await Task.CompletedTask;
+        _context?.Logger.Info($"{Manifest.Name} stopping");
+        return Task.CompletedTask;
     }
 }
