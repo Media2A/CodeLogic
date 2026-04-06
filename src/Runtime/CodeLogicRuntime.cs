@@ -56,9 +56,6 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             // Set app version on environment
             CodeLogicEnvironment.AppVersion = _options.AppVersion;
 
-            // Apply debug-aware logging defaults
-            ApplyDebugDefaults();
-
             // First-run scaffolding (no exit — just scaffold and continue)
             var frameworkRoot = _options.GetFrameworkPath();
             var appRoot       = _options.GetApplicationPath();
@@ -74,6 +71,10 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
             // Load CodeLogic.json
             await LoadConfigurationAsync();
+
+            // If debugger is attached, override log levels in memory so
+            // all Info/Debug messages write to disk during development.
+            ApplyDebugDefaults();
 
             // Create the framework logger now that we have config
             _frameworkLogger = CreateFrameworkLogger();
@@ -299,10 +300,17 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
     private void ApplyDebugDefaults()
     {
-        // Debug defaults are applied when generating CodeLogic.json (FirstRunManager).
-        // At runtime, the loaded config always wins.
-        if (Debugger.IsAttached)
-            Console.WriteLine("[CodeLogic] Debugger attached — verbose defaults applied to new configs");
+        if (_config == null || !Debugger.IsAttached) return;
+
+        // When a debugger is attached, override log levels at runtime so all
+        // Info/Debug messages write to disk — regardless of what CodeLogic.json says.
+        // The file on disk is NOT modified; this is a runtime-only override.
+        // This gives developers verbose logs during debugging without editing config.
+        if (_config.Logging.GetGlobalLogLevel() > LogLevel.Debug)
+            _config.Logging.GlobalLevel = "Debug";
+
+        if (_config.Logging.GetConsoleLogLevel() > LogLevel.Debug)
+            _config.Logging.ConsoleMinimumLevel = "Debug";
     }
 
     private ILogger CreateFrameworkLogger()
