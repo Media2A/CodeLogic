@@ -5,28 +5,16 @@ using CodeLogic.Demo.Console.Events;
 using CodeLogic.Demo.Console.Localization;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Program.cs — Entry point. Boot sequence only.
-//
-// Responsibilities:
-//   - Configure CodeLogic paths and options
-//   - Register the application
-//   - Run the 3-step startup: Configure → Start
-//   - Hand off to the main loop
-//   - Ensure graceful shutdown
-//
-// Nothing domain-specific lives here. Everything is delegated to typed classes.
+// Program.cs — Entry point. Boot sequence + main loop only.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Step 1: Initialize the framework ──────────────────────────────────────
-// Sets up paths, reads CLI args, scaffolds directories on first run,
-// loads CodeLogic.json. Does NOT start any libraries yet.
-
+// ── Step 1: Initialize ────────────────────────────────────────────────────
 var initResult = await CodeLogic.CodeLogic.InitializeAsync(opts =>
 {
-    opts.FrameworkRootPath    = "data/codelogic"; // framework configs + lib data
-    opts.ApplicationRootPath  = "data/app";        // app config + localization
-    opts.AppVersion           = "1.0.0";
-    opts.HandleShutdownSignals = true;             // hooks CTRL+C → StopAsync()
+    opts.FrameworkRootPath     = "data/codelogic";
+    opts.ApplicationRootPath   = "data/app";
+    opts.AppVersion            = "1.0.0";
+    opts.HandleShutdownSignals = true;
 });
 
 if (!initResult.Success || initResult.ShouldExit)
@@ -35,47 +23,42 @@ if (!initResult.Success || initResult.ShouldExit)
     return;
 }
 
-// ── Step 2: Register the application ──────────────────────────────────────
-// Tells the framework which IApplication to run. Must be called before
-// ConfigureAsync so the app participates in config/localization generation.
-
+// ── Step 2: Register + Configure + Start ──────────────────────────────────
 CodeLogic.CodeLogic.RegisterApplication(new DemoApplication());
-
-// ── Step 3: Configure ─────────────────────────────────────────────────────
-// Discovers libraries (if any), runs OnConfigureAsync on all of them,
-// generates config/localization files that don't exist yet, loads them all.
-
 await CodeLogic.CodeLogic.ConfigureAsync();
-
-// ── Step 4: Start ─────────────────────────────────────────────────────────
-// Initializes + starts all libraries, then initializes + starts the app.
-// After this returns, everything is running and ready.
-
 await CodeLogic.CodeLogic.StartAsync();
 
 // ── Main loop ─────────────────────────────────────────────────────────────
-// At this point the framework is fully running. The app can do its work.
-
 var ctx    = CodeLogic.CodeLogic.GetApplicationContext()!;
 var config = ctx.Configuration.Get<DemoConfig>();
 var bus    = CodeLogic.CodeLogic.GetEventBus();
 
+// Show where the log file is so the user knows where to look
+var logFile = Path.Combine(
+    Path.GetFullPath("data/app/logs"),
+    "application.log");
+
 Console.WriteLine($"\nMachine : {CodeLogicEnvironment.MachineName}");
 Console.WriteLine($"Version : {CodeLogicEnvironment.AppVersion}");
 Console.WriteLine($"Debug   : {CodeLogicEnvironment.IsDebugging}");
-Console.WriteLine($"Batch   : {config.MaxItemsPerBatch} items");
+Console.WriteLine($"Log     : {logFile}");
+Console.WriteLine($"Level   : {(CodeLogicEnvironment.IsDebugging ? "Debug (Development.json)" : "Warning (CodeLogic.json)")}");
 Console.WriteLine();
 
-// Subscribe to work events from Program scope
+// Subscribe to work completion events — displayed in console
 using var workSub = bus.Subscribe<WorkCompletedEvent>(e =>
 {
     var icon = e.Success ? "+" : "x";
     Console.WriteLine($"  [{icon}] {e.TaskName} — {e.Duration.TotalMilliseconds:0}ms");
 });
 
-Console.WriteLine("Commands: [W] Do work   [H] Health   [Q] Quit\n");
+Console.WriteLine("Commands:");
+Console.WriteLine("  [W] Simulate work   (logs Info/Warning to application.log)");
+Console.WriteLine("  [L] Log all levels  (shows what writes to disk vs filtered)");
+Console.WriteLine("  [H] Health report");
+Console.WriteLine("  [Q] Quit");
+Console.WriteLine();
 
-// Simple REPL loop
 bool running = true;
 while (running)
 {
@@ -89,16 +72,30 @@ while (running)
     switch (key)
     {
         case ConsoleKey.W:
-            // Simulate work and publish a result event
+            // Simulate work — publishes WorkCompletedEvent which DemoApplication
+            // subscribes to and logs at Info level → writes to application.log
             bus.Publish(new UserActionEvent("do-work"));
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            await Task.Delay(config.WorkIntervalMs); // simulated work
+
+            // Randomly succeed or fail to show both Info and Warning in logs
+            await Task.Delay(config.WorkIntervalMs);
             sw.Stop();
-            bus.Publish(new WorkCompletedEvent("SimulatedBatch", sw.Elapsed, Success: true));
+            var success = Random.Shared.NextDouble() > 0.3; // 70% success rate
+            bus.Publish(new WorkCompletedEvent("SimulatedBatch", sw.Elapsed, success));
+            break;
+
+        case ConsoleKey.L:
+            // Write one entry at every log level.
+            // With debugger (Development.json): ALL levels write to disk
+            // Without debugger (CodeLogic.json): only Warning+ writes to disk
+            Console.WriteLine("\n  Writing all log levels to application.log...");
+            DemoApplication.LogAllLevels(ctx, "Demo");
+            Console.WriteLine($"  Done. Check: {logFile}");
+            Console.WriteLine($"  (Current level filter: " +
+                $"{(CodeLogicEnvironment.IsDebugging ? "Trace+" : "Warning+")})\n");
             break;
 
         case ConsoleKey.H:
-            // Print a live health report
             var health = await CodeLogic.CodeLogic.GetHealthAsync();
             Console.WriteLine(health.ToConsoleString());
             break;
@@ -109,7 +106,5 @@ while (running)
     }
 }
 
-// ── Step 5: Graceful shutdown ──────────────────────────────────────────────
-// Stops the app first, then all libraries in reverse dependency order.
-
+// ── Graceful shutdown ──────────────────────────────────────────────────────
 await CodeLogic.CodeLogic.StopAsync();

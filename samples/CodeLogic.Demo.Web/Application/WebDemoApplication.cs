@@ -8,11 +8,9 @@ namespace CodeLogic.Demo.Web.Application;
 // ─────────────────────────────────────────────────────────────────────────────
 // The consuming application — implements IApplication for the web demo.
 //
-// Runs its lifecycle phases BEFORE the ASP.NET host starts handling requests:
-//   Configure → Initialize → Start
-//
-// The application is stopped AFTER the ASP.NET host shuts down,
-// hooked via IHostApplicationLifetime.ApplicationStopping in Program.cs.
+// Logging:
+//   context.Logger writes to: data/app/logs/application.log
+//   Log level from:           CodeLogic.Development.json (debugger) or CodeLogic.json
 // ─────────────────────────────────────────────────────────────────────────────
 
 public class WebDemoApplication : IApplication
@@ -29,13 +27,13 @@ public class WebDemoApplication : IApplication
     // ── Phase 1: Configure ────────────────────────────────────────────────
     public async Task OnConfigureAsync(ApplicationContext context)
     {
-        // Register all config models — generates config.json on first run
         context.Configuration.Register<WebConfig>();
-
-        // Register localization — generates web.en-US.json, web.da-DK.json, etc.
         context.Localization.Register<WebStrings>();
 
+        context.Logger.Trace("OnConfigureAsync: registered WebConfig and WebStrings");
+        context.Logger.Debug($"OnConfigureAsync: config dir = {context.ConfigDirectory}");
         context.Logger.Info($"{Manifest.Name} configured");
+
         await Task.CompletedTask;
     }
 
@@ -43,26 +41,41 @@ public class WebDemoApplication : IApplication
     public async Task OnInitializeAsync(ApplicationContext context)
     {
         var config = context.Configuration.Get<WebConfig>();
-        context.Logger.Info($"{Manifest.Name} initialized — site='{config.SiteTitle}'");
+
+        context.Logger.Trace("OnInitializeAsync: reading WebConfig");
+        context.Logger.Debug($"OnInitializeAsync: SiteTitle='{config.SiteTitle}', " +
+                             $"DefaultLanguage='{config.DefaultLanguage}', " +
+                             $"DetailedErrors={config.DetailedErrors}");
+        context.Logger.Info($"{Manifest.Name} initialized");
+
         await Task.CompletedTask;
     }
 
     // ── Phase 3: Start ────────────────────────────────────────────────────
     public async Task OnStartAsync(ApplicationContext context)
     {
-        context.Logger.Info($"{Manifest.Name} starting");
+        context.Logger.Debug("OnStartAsync: subscribing to events");
 
-        // Subscribe to incoming request events (published by endpoints)
+        // Log every incoming request (Trace — very verbose)
         context.Events.Subscribe<RequestReceivedEvent>(e =>
-            context.Logger.Debug($"Request: {e.Method} {e.Path}"));
+            context.Logger.Trace($"Request: {e.Method} {e.Path}" +
+                                 (e.UserId != null ? $" user={e.UserId}" : "")));
 
-        // Subscribe to app notifications
+        // Log app notifications at appropriate level based on severity
         context.Events.Subscribe<AppNotificationEvent>(e =>
-            context.Logger.Info($"[{e.Severity.ToUpper()}] {e.Title}: {e.Message}"));
+        {
+            var msg = $"Notification [{e.Severity}] {e.Title}: {e.Message}";
+            switch (e.Severity.ToLowerInvariant())
+            {
+                case "error":    context.Logger.Error(msg);   break;
+                case "warn":
+                case "warning":  context.Logger.Warning(msg); break;
+                default:         context.Logger.Info(msg);    break;
+            }
+        });
 
-        // Announce startup
         context.Events.Publish(new AppNotificationEvent(
-            "Startup", $"{Manifest.Name} is ready", "info"));
+            "Startup", $"{Manifest.Name} is ready to handle requests", "info"));
 
         context.Logger.Info($"{Manifest.Name} started");
         await Task.CompletedTask;
