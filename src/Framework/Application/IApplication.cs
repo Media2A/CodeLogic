@@ -1,3 +1,5 @@
+using CodeLogic.Framework.Libraries;
+
 namespace CodeLogic.Framework.Application;
 
 /// <summary>
@@ -21,4 +23,12 @@ public interface IApplication
 
     /// <summary>Phase 4: Stop application services gracefully.</summary>
     Task OnStopAsync();
+
+    /// <summary>
+    /// Returns the current health of the application.
+    /// Called by the framework during health checks and --health CLI.
+    /// Default implementation returns Healthy — override to add real checks.
+    /// </summary>
+    Task<Libraries.HealthStatus> HealthCheckAsync() =>
+        Task.FromResult(Libraries.HealthStatus.Healthy($"{Manifest.Name} is running"));
 }

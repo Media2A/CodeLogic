@@ -30,7 +30,9 @@ public static class Libraries
 
     public static IEnumerable<ILibrary> GetAll()
     {
+        // Returns empty (not throws) when called before ConfigureAsync —
+        // querying all is a safe read, not an indication of programmer error.
         var mgr = CodeLogic.GetLibraryManager();
-        return mgr?.GetAllLibraries() ?? Enumerable.Empty<ILibrary>();
+        return mgr?.GetAllLibraries() ?? [];
     }
 }

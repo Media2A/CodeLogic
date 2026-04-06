@@ -7,9 +7,16 @@ public sealed class InitializationResult
     public bool ShouldExit { get; init; }
     public string Message { get; init; } = string.Empty;
 
-    public static InitializationResult Succeeded(bool isFirstRun = false) => new()
+    /// <summary>
+    /// When true, the caller should print a health report after StartAsync()
+    /// then exit. Set by the --health CLI flag.
+    /// </summary>
+    public bool RunHealthCheck { get; init; }
+
+    public static InitializationResult Succeeded(bool isFirstRun = false, bool runHealthCheck = false) => new()
     {
-        Success = true, IsFirstRun = isFirstRun, Message = "Framework initialized successfully"
+        Success = true, IsFirstRun = isFirstRun, Message = "Framework initialized successfully",
+        RunHealthCheck = runHealthCheck
     };
 
     public static InitializationResult Failed(string message) => new()

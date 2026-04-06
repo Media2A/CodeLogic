@@ -4,6 +4,7 @@ using CodeLogic.Core.Events;
 using CodeLogic.Core.Logging;
 using CodeLogic.Core.Utilities;
 using CodeLogic.Framework.Application;
+using CodeLogic.Framework.Application.Plugins;
 using CodeLogic.Framework.Libraries;
 
 namespace CodeLogic;
@@ -17,6 +18,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
     // Created after config is loaded so it respects CodeLogic.json settings.
     // Before that, startup messages go to Console only.
     private ILogger _frameworkLogger = NullLogger.Instance;
+
+    // App-managed PluginManager — optional, registered via SetPluginManager()
+    private PluginManager? _pluginManager;
 
     private CodeLogicOptions? _options;
     private CodeLogicConfiguration? _config;
@@ -51,6 +55,19 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             {
                 Console.WriteLine($"CodeLogic 3.0.0 | App {_options.AppVersion}");
                 return InitializationResult.Exit("--version");
+            }
+
+            if (cli.ShowInfo)
+            {
+                // --info can be answered immediately — no libraries needed
+                Console.WriteLine($"CodeLogic 3.0.0");
+                Console.WriteLine($"  App version  : {_options.AppVersion}");
+                Console.WriteLine($"  Machine      : {Environment.MachineName}");
+                Console.WriteLine($"  Framework    : {_options.GetFrameworkPath()}");
+                Console.WriteLine($"  Application  : {_options.GetApplicationPath()}");
+                Console.WriteLine($"  Libraries    : {_options.GetLibrariesPath()}");
+                Console.WriteLine($"  Development  : {IsDevelopmentMode()}");
+                return InitializationResult.Exit("--info");
             }
 
             // Set app version on environment
@@ -104,7 +121,8 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
                 };
             }
 
-            return InitializationResult.Succeeded();
+            // --health needs libraries running — signal the caller to handle it after StartAsync
+            return InitializationResult.Succeeded(runHealthCheck: cli.ShowHealth);
         }
         catch (Exception ex)
         {
@@ -228,6 +246,14 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
                 catch (Exception ex) { _frameworkLogger.Error($"Application stop error: {ex.Message}", ex); }
             }
 
+            // Unload all plugins before stopping libraries
+            if (_pluginManager != null)
+            {
+                _frameworkLogger.Info("Unloading plugins...");
+                try { await _pluginManager.UnloadAllAsync(); }
+                catch (Exception ex) { _frameworkLogger.Error($"Plugin unload error: {ex.Message}", ex); }
+            }
+
             if (_libraryManager != null)
                 await _libraryManager.StopAllAsync();
 
@@ -267,11 +293,25 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
     public async Task<HealthReport> GetHealthAsync()
     {
         var libs    = _libraryManager != null ? await _libraryManager.GetHealthAsync() : new();
-        var overall = libs.Values.All(h => h.IsHealthy);
+        var plugins = _pluginManager  != null ? await _pluginManager.GetHealthAsync()  : new();
+
+        HealthStatus? appHealth = null;
+        if (_application != null)
+        {
+            try { appHealth = await _application.HealthCheckAsync(); }
+            catch (Exception ex) { appHealth = HealthStatus.FromException(ex); }
+        }
+
+        var overall = libs.Values.All(h => h.IsHealthy)
+                   && plugins.Values.All(h => h.IsHealthy)
+                   && (appHealth?.IsHealthy ?? true);
+
         return new HealthReport
         {
-            IsHealthy = overall,
-            Libraries = libs,
+            IsHealthy   = overall,
+            Libraries   = libs,
+            Plugins     = plugins,
+            Application = appHealth,
         };
     }
 
@@ -281,6 +321,14 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
     public IApplication?      GetApplication()           => _application;
     public ApplicationContext? GetApplicationContext()   => _applicationContext;
     public IEventBus          GetEventBus()              => _eventBus;
+
+    public void SetPluginManager(PluginManager manager)
+    {
+        _pluginManager = manager;
+        _frameworkLogger.Info($"PluginManager registered");
+    }
+
+    public PluginManager? GetPluginManager() => _pluginManager;
     public CodeLogicOptions   GetOptions()               => GetOptionsOrThrow();
     public CodeLogicConfiguration GetConfiguration()    => GetConfigOrThrow();
 

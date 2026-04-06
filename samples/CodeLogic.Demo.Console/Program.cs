@@ -28,6 +28,25 @@ CodeLogic.CodeLogic.RegisterApplication(new DemoApplication());
 await CodeLogic.CodeLogic.ConfigureAsync();
 await CodeLogic.CodeLogic.StartAsync();
 
+// ── Optional: register a PluginManager ────────────────────────────────────
+// Uncomment to enable plugin support. The PluginManager will participate in
+// health checks and graceful shutdown automatically.
+//
+// var pluginMgr = new PluginManager(CodeLogic.CodeLogic.GetEventBus());
+// await pluginMgr.LoadAllAsync();
+// CodeLogic.CodeLogic.SetPluginManager(pluginMgr);
+
+// ── Handle --health CLI flag ───────────────────────────────────────────────
+// If the user ran: myapp --health
+// Print the health report and exit (libraries are running so we can check them).
+if (initResult.RunHealthCheck)
+{
+    var healthReport = await CodeLogic.CodeLogic.GetHealthAsync();
+    Console.WriteLine(healthReport.ToConsoleString());
+    await CodeLogic.CodeLogic.StopAsync();
+    return;
+}
+
 // ── Main loop ─────────────────────────────────────────────────────────────
 var ctx    = CodeLogic.CodeLogic.GetApplicationContext()!;
 var config = ctx.Configuration.Get<DemoConfig>();
