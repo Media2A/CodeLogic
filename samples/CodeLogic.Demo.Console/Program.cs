@@ -42,7 +42,7 @@ Console.WriteLine($"\nMachine : {CodeLogicEnvironment.MachineName}");
 Console.WriteLine($"Version : {CodeLogicEnvironment.AppVersion}");
 Console.WriteLine($"Debug   : {CodeLogicEnvironment.IsDebugging}");
 Console.WriteLine($"Log     : {logFile}");
-Console.WriteLine($"Level   : {(CodeLogicEnvironment.IsDebugging ? "Debug (Development.json)" : "Warning (CodeLogic.json)")}");
+Console.WriteLine($"Level   : {(CodeLogicEnvironment.IsDevelopment ? "Debug (Development.json)" : "Warning (CodeLogic.json)")}");
 Console.WriteLine();
 
 // Subscribe to work completion events — displayed in console

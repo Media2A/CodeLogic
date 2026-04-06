@@ -22,7 +22,26 @@ public static class CodeLogicEnvironment
 
     /// <summary>
     /// Returns true if a debugger is currently attached to this process.
-    /// Used by the framework to set debug-aware logging defaults.
     /// </summary>
     public static bool IsDebugging => Debugger.IsAttached;
+
+    /// <summary>
+    /// Returns true when running in development mode.
+    /// True if debugger is attached OR if this is a DEBUG build.
+    /// Mirrors the framework's config file selection logic:
+    ///   IsDevelopment = true  → CodeLogic.Development.json
+    ///   IsDevelopment = false → CodeLogic.json
+    /// </summary>
+    public static bool IsDevelopment
+    {
+        get
+        {
+            if (Debugger.IsAttached) return true;
+#if DEBUG
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
 }

@@ -300,17 +300,28 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
     private void ApplyDebugDefaults()
     {
-        if (_config == null || !Debugger.IsAttached) return;
+        // No-op — development mode is handled via CodeLogic.Development.json.
+        // LoadConfigurationAsync selects the right file via IsDevelopmentMode().
+    }
 
-        // When a debugger is attached, override log levels at runtime so all
-        // Info/Debug messages write to disk — regardless of what CodeLogic.json says.
-        // The file on disk is NOT modified; this is a runtime-only override.
-        // This gives developers verbose logs during debugging without editing config.
-        if (_config.Logging.GetGlobalLogLevel() > LogLevel.Debug)
-            _config.Logging.GlobalLevel = "Debug";
-
-        if (_config.Logging.GetConsoleLogLevel() > LogLevel.Debug)
-            _config.Logging.ConsoleMinimumLevel = "Debug";
+    /// <summary>
+    /// Returns true when running in development mode:
+    ///   - Debugger is attached at runtime (any build), OR
+    ///   - This is a DEBUG build (dotnet run without -c Release)
+    ///
+    /// Examples:
+    ///   dotnet run              → DEBUG build  → Development.json ✓
+    ///   dotnet run -c Release   → Release build, no debugger → CodeLogic.json
+    ///   dotnet run + attach     → any build, debugger → Development.json ✓
+    /// </summary>
+    private static bool IsDevelopmentMode()
+    {
+        if (Debugger.IsAttached) return true;
+#if DEBUG
+        return true;
+#else
+        return false;
+#endif
     }
 
     private ILogger CreateFrameworkLogger()
@@ -340,13 +351,16 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         var devPath = opts.GetCodeLogicDevelopmentConfigPath();
         var basePath = opts.GetCodeLogicConfigPath();
 
-        // Use CodeLogic.Development.json when debugger is attached and the file exists.
+        // Use CodeLogic.Development.json when:
+        //   - Debugger is attached at runtime, OR
+        //   - This is a Debug build (#if DEBUG)
         // Otherwise fall back to CodeLogic.json (production config).
         string configPath;
-        if (Debugger.IsAttached && File.Exists(devPath))
+        if (IsDevelopmentMode() && File.Exists(devPath))
         {
             configPath = devPath;
-            Console.WriteLine($"[CodeLogic] Using {Path.GetFileName(devPath)}");
+            var reason = Debugger.IsAttached ? "debugger attached" : "DEBUG build";
+            Console.WriteLine($"[CodeLogic] Using {Path.GetFileName(devPath)} ({reason})");
         }
         else
         {
