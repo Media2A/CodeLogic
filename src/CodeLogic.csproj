@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CodeLogic</RootNamespace>
+    <AssemblyName>CodeLogic</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>13</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Version>3.0.0</Version>
+    <Authors>Media2A</Authors>
+    <Copyright>Copyright © 2026 Media2A</Copyright>
+    <Description>Modular .NET 10 framework with lifecycle-managed libraries, applications, and plugins. Zero external NuGet dependencies.</Description>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <!-- Treat warnings as errors for cleaner code -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

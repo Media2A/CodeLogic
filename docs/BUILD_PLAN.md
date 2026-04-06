@@ -4,7 +4,7 @@
 
 A modular .NET 10 framework with clean layered architecture:
 - **Core** — standalone engines, zero framework coupling, usable in any .NET app
-- **Framework** — lifecycle orchestration wiring Core into Libraries, Application, Plugins
+- **Framework** — lifecycle orchestration wiring Core into Libraries and Application (which includes Plugins)
 - **Libs** — official CL.* integrations implementing ILibrary
 - **Static facade** — unchanged public API + `ICodeLogicRuntime` for DI/testing
 
@@ -25,8 +25,8 @@ CodeLogic/                          ← this repo
 │   │
 │   ├── Framework/
 │   │   ├── Libraries/
-│   │   ├── Application/
-│   │   └── Plugins/
+│   │   └── Application/        ← IApplication + Plugins (app-managed)
+│   │       └── Plugins/
 │   │
 │   ├── ICodeLogicRuntime.cs
 │   ├── CodeLogicRuntime.cs
@@ -66,11 +66,11 @@ CodeLogic.Core.Events           IEventBus, EventBus, IEvent, EventSubscription
 CodeLogic.Core.Results          Result<T>, Result, Error, ErrorCode
 CodeLogic.Core.Utilities        SemanticVersion, StartupValidator, FirstRunManager
 
-CodeLogic.Framework.Libraries   ILibrary, LibraryContext, LibraryManager, LibraryManifest
-                                LibraryDependency, LoadedLibrary, LibraryState
-CodeLogic.Framework.Application IApplication, ApplicationContext, ApplicationManifest
-CodeLogic.Framework.Plugins     IPlugin, PluginContext, PluginManifest, PluginManager
-                                PluginLoadContext, LoadedPlugin, PluginState, PluginOptions
+CodeLogic.Framework.Libraries            ILibrary, LibraryContext, LibraryManager, LibraryManifest
+                                         LibraryDependency, LoadedLibrary, LibraryState
+CodeLogic.Framework.Application          IApplication, ApplicationContext, ApplicationManifest
+CodeLogic.Framework.Application.Plugins  IPlugin, PluginContext, PluginManifest, PluginManager
+                                         PluginLoadContext, LoadedPlugin, PluginState, PluginOptions
 
 CodeLogic                       CodeLogic (static), Libraries (static), Plugins (static)
                                 ICodeLogicRuntime, CodeLogicRuntime
@@ -451,14 +451,21 @@ public static class CodeLogicEnvironment
 
 ## Phase 3 — Framework/Application
 
-**Files:**
+**Files** (all in `src/Framework/Application/`):
 - `IApplication.cs`
 - `ApplicationContext.cs` — adds `IEventBus Events`
 - `ApplicationManifest.cs`
 
+Plugins are a sub-concern of Application and live in `src/Framework/Application/Plugins/` — see Phase 4.
+
 ---
 
-## Phase 4 — Framework/Plugins (UPGRADED TO PARITY)
+## Phase 4 — Framework/Application/Plugins (UPGRADED TO PARITY)
+
+Plugins live under Application because they are **app-managed** — the consuming
+application decides what plugins to load, when to load them, and manages their
+lifecycle. The framework provides the infrastructure (PluginManager, PluginContext)
+but plugins are not framework-managed the way libraries are.
 
 **4-phase lifecycle matching ILibrary exactly:**
 ```csharp
@@ -494,7 +501,7 @@ public class PluginContext
 }
 ```
 
-**Files:**
+**Files** (all in `src/Framework/Application/Plugins/`):
 - `IPlugin.cs`
 - `PluginContext.cs`
 - `PluginManifest.cs`
