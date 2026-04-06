@@ -1,5 +1,7 @@
 - name: Getting Started
   href: getting-started.md
+- name: Application Lifecycle
+  href: application-lifecycle.md
 - name: Library Lifecycle
   href: library-lifecycle.md
 - name: Configuration

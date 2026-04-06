@@ -172,8 +172,11 @@ public class MyDatabaseLibrary : ILibrary
 
 ## Your First Application
 
+Your application implements `IApplication` — it is the centrepiece of a CodeLogic host. Unlike libraries, it always starts **after** all libraries are fully running, so it can safely access any library service from `OnInitializeAsync` onwards.
+
 ```csharp
-using CodeLogic.Framework;
+using CodeLogic.Framework.Application;
+using CodeLogic.Framework.Libraries;
 
 public class MyApp : IApplication
 {
@@ -184,28 +187,52 @@ public class MyApp : IApplication
         Version = "1.0.0"
     };
 
+    private ApplicationContext _ctx = null!;
+
+    // Phase 1: register config models (called during ConfigureAsync)
     public Task OnConfigureAsync(ApplicationContext context)
     {
-        // Register app-level config here
+        context.Configuration.Register<MyAppConfig>();
         return Task.CompletedTask;
     }
 
-    public async Task RunAsync(ApplicationContext context)
+    // Phase 2: libraries are fully running — set up your services
+    public async Task OnInitializeAsync(ApplicationContext context)
     {
-        context.Logger.LogInformation("Application running");
+        _ctx = context;  // keep a reference for OnStopAsync
 
-        // Subscribe to events
-        using var sub = context.Events.Subscribe<MyEvent>(e =>
-            context.Logger.LogInformation("Received: {Value}", e.Value));
+        var config = context.Configuration.Get<MyAppConfig>();
 
-        // Main application loop
-        await Task.Delay(Timeout.Infinite, context.CancellationToken);
+        // Access any fully-started library service
+        var db = Libraries.Get<MyDatabaseLibrary>();
+
+        context.Logger.Info($"Initialized — db ready: {db != null}");
+        await Task.CompletedTask;
+    }
+
+    // Phase 3: subscribe to events, start background work
+    public Task OnStartAsync(ApplicationContext context)
+    {
+        context.Events.Subscribe<MyEvent>(e =>
+            context.Logger.Info($"Received event: {e}"));
+
+        context.Logger.Info("Application started");
+        return Task.CompletedTask;
+    }
+
+    // Phase 4: clean up before libraries stop
+    public Task OnStopAsync()
+    {
+        _ctx.Logger.Info("Application stopping");
+        return Task.CompletedTask;
     }
 
     public Task<HealthStatus> HealthCheckAsync()
         => Task.FromResult(HealthStatus.Healthy("Running"));
 }
 ```
+
+> See [Application Lifecycle](application-lifecycle.md) for a full explanation of `IApplication`, `ApplicationContext`, plugins, and the exact startup ordering.
 
 ---
 

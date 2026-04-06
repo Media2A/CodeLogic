@@ -1,6 +1,19 @@
 # Plugins
 
-Plugins are hot-reloadable, isolated components managed by your application via `PluginManager`. Unlike libraries, plugins are loaded into separate `AssemblyLoadContext` instances and can be unloaded and reloaded at runtime without restarting the host process.
+Plugins are hot-reloadable, isolated components that **your application owns and manages** via `PluginManager`. They are not part of the framework's built-in startup — you create a `PluginManager` in your `IApplication`, register it with `CodeLogic.SetPluginManager()`, and load plugins yourself during `OnStartAsync`.
+
+Unlike libraries (which are fully started before your application runs), plugins are loaded and managed entirely within the application layer. The framework participates only in health reporting and graceful shutdown: when `StopAsync()` is called, plugins are unloaded automatically before libraries stop.
+
+```
+Libraries (framework-managed, start first)
+    ↓ fully started
+IApplication.OnInitializeAsync / OnStartAsync
+    → creates PluginManager
+    → CodeLogic.SetPluginManager(manager)
+    → manager.LoadAllAsync()
+        ↓
+      Plugins running (app-managed)
+```
 
 ---
 
@@ -83,30 +96,46 @@ public enum PluginState
 
 ## PluginManager
 
-The application manages plugins through `PluginManager`. Get or set it on the application context:
+Your application creates and owns the `PluginManager`. Register it with `CodeLogic.SetPluginManager()` so the framework includes plugins in health checks and shuts them down gracefully before libraries stop:
 
 ```csharp
-// In your application:
-public Task OnConfigureAsync(ApplicationContext context)
+public sealed class MyApp : IApplication
 {
-    var manager = new PluginManager(context);
-    context.SetPluginManager(manager);
-    return Task.CompletedTask;
+    // Phase 2: create and register the PluginManager
+    public Task OnInitializeAsync(ApplicationContext context)
+    {
+        var manager = new PluginManager(new PluginOptions
+        {
+            PluginsDirectory = Path.Combine(context.DataDirectory, "plugins"),
+            EnableHotReload  = true
+        }, context.Logger, context.Events);
+
+        // Register with the framework — participates in health + shutdown
+        CodeLogic.SetPluginManager(manager);
+
+        return Task.CompletedTask;
+    }
+
+    // Phase 3: load plugins once the app is starting
+    public async Task OnStartAsync(ApplicationContext context)
+    {
+        var manager = CodeLogic.GetPluginManager()!;
+        await manager.LoadAllAsync();
+    }
+
+    // ...OnStopAsync, etc.
 }
+```
 
-public async Task RunAsync(ApplicationContext context)
-{
-    var manager = context.GetPluginManager();
+Direct plugin operations:
 
-    // Load a plugin from its directory
-    await manager.LoadAsync("myapp.dashboard");
+```csharp
+var manager = CodeLogic.GetPluginManager()!;
 
-    // Unload
-    await manager.UnloadAsync("myapp.dashboard");
-
-    // Reload (unload + load)
-    await manager.ReloadAsync("myapp.dashboard");
-}
+await manager.LoadAsync("myapp.dashboard");     // load one plugin
+await manager.UnloadAsync("myapp.dashboard");   // unload one plugin
+await manager.ReloadAsync("myapp.dashboard");   // unload + reload (hot reload)
+await manager.UnloadAllAsync();                 // unload everything
 ```
 
 ---
