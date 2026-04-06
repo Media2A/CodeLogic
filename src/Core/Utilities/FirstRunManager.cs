@@ -81,53 +81,74 @@ public static class FirstRunManager
 
     private static async Task GenerateCodeLogicJsonAsync(string frameworkRoot)
     {
-        var configPath = Path.Combine(frameworkRoot, "Framework", "CodeLogic.json");
-        if (File.Exists(configPath)) return;
-
-        bool isDebugging = Debugger.IsAttached;
-
-        // Build config as anonymous object — no dependency on CodeLogicConfiguration yet
-        var config = new
-        {
-            framework = new { name = "CodeLogic", version = "3.0.0" },
-            logging = new
-            {
-                mode = "singleFile",
-                maxFileSizeMb = 10,
-                maxRolledFiles = 5,
-                globalLevel = isDebugging ? "Debug" : "Warning",
-                enableConsoleOutput = isDebugging,
-                consoleMinimumLevel = "Debug",
-                enableDebugMode = isDebugging,
-                centralizedDebugLog = false,
-                includeMachineName = true,
-                timestampFormat = "yyyy-MM-dd HH:mm:ss.fff"
-            },
-            localization = new
-            {
-                defaultCulture = "en-US",
-                supportedCultures = new[] { "en-US" },
-                autoGenerateTemplates = true
-            },
-            libraries = new
-            {
-                discoveryPattern = "CL.*",
-                enableDependencyResolution = true
-            },
-            healthChecks = new
-            {
-                enabled = true,
-                intervalSeconds = 30
-            }
-        };
-
-        var json = JsonSerializer.Serialize(config, new JsonSerializerOptions
+        var jsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        };
 
-        await File.WriteAllTextAsync(configPath, json);
+        // ── CodeLogic.json — production defaults (always generated) ──────────
+        var configPath = Path.Combine(frameworkRoot, "Framework", "CodeLogic.json");
+        if (!File.Exists(configPath))
+        {
+            var config = new
+            {
+                framework = new { name = "CodeLogic", version = "3.0.0" },
+                logging = new
+                {
+                    mode = "singleFile",
+                    maxFileSizeMb = 10,
+                    maxRolledFiles = 5,
+                    globalLevel = "Warning",        // quiet in production
+                    enableConsoleOutput = false,
+                    consoleMinimumLevel = "Warning",
+                    enableDebugMode = false,
+                    centralizedDebugLog = false,
+                    includeMachineName = true,
+                    timestampFormat = "yyyy-MM-dd HH:mm:ss.fff"
+                },
+                localization = new
+                {
+                    defaultCulture = "en-US",
+                    supportedCultures = new[] { "en-US" },
+                    autoGenerateTemplates = true
+                },
+                libraries = new
+                {
+                    discoveryPattern = "CL.*",
+                    enableDependencyResolution = true
+                },
+                healthChecks = new
+                {
+                    enabled = true,
+                    intervalSeconds = 30
+                }
+            };
+
+            await File.WriteAllTextAsync(configPath,
+                JsonSerializer.Serialize(config, jsonOptions));
+        }
+
+        // ── CodeLogic.Development.json — dev overrides (always generated) ────
+        // Used automatically when Debugger.IsAttached. Add to .gitignore for
+        // per-machine customization. Never committed to source control.
+        var devConfigPath = Path.Combine(frameworkRoot, "Framework", "CodeLogic.Development.json");
+        if (!File.Exists(devConfigPath))
+        {
+            var devConfig = new
+            {
+                logging = new
+                {
+                    globalLevel = "Debug",          // verbose to disk
+                    enableConsoleOutput = true,      // also to console
+                    consoleMinimumLevel = "Debug",
+                    enableDebugMode = true
+                }
+            };
+
+            await File.WriteAllTextAsync(devConfigPath,
+                JsonSerializer.Serialize(devConfig, jsonOptions));
+        }
     }
 
     private static async Task CreateMarkerAsync(string frameworkRoot)

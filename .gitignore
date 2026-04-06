@@ -9,5 +9,8 @@ obj/
 *.snupkg
 CodeLogic/
 data/
+
+# Development config overlay — per-machine, never committed
+**/CodeLogic.Development.json
 .DS_Store
 Thumbs.db

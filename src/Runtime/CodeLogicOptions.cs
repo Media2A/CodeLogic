@@ -29,6 +29,14 @@ public sealed class CodeLogicOptions
     public string GetCodeLogicConfigPath() =>
         Path.Combine(GetFrameworkPath(), "Framework", "CodeLogic.json");
 
+    /// <summary>
+    /// Path to the development config overlay.
+    /// Loaded instead of CodeLogic.json when Debugger.IsAttached.
+    /// Add this file to .gitignore — it is per-machine, never committed.
+    /// </summary>
+    public string GetCodeLogicDevelopmentConfigPath() =>
+        Path.Combine(GetFrameworkPath(), "Framework", "CodeLogic.Development.json");
+
     public string GetLibrariesPath() =>
         Path.Combine(GetFrameworkPath(), "Libraries");
 

@@ -336,16 +336,32 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
     private async Task LoadConfigurationAsync()
     {
-        var configPath = GetOptionsOrThrow().GetCodeLogicConfigPath();
+        var opts    = GetOptionsOrThrow();
+        var devPath = opts.GetCodeLogicDevelopmentConfigPath();
+        var basePath = opts.GetCodeLogicConfigPath();
+
+        // Use CodeLogic.Development.json when debugger is attached and the file exists.
+        // Otherwise fall back to CodeLogic.json (production config).
+        string configPath;
+        if (Debugger.IsAttached && File.Exists(devPath))
+        {
+            configPath = devPath;
+            Console.WriteLine($"[CodeLogic] Using {Path.GetFileName(devPath)}");
+        }
+        else
+        {
+            configPath = basePath;
+        }
+
         if (!File.Exists(configPath))
-            throw new FileNotFoundException($"CodeLogic.json not found at: {configPath}");
+            throw new FileNotFoundException($"Config not found at: {configPath}");
 
         var json = await File.ReadAllTextAsync(configPath);
         _config = JsonSerializer.Deserialize<CodeLogicConfiguration>(json, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        }) ?? throw new InvalidOperationException("Failed to deserialize CodeLogic.json");
+            PropertyNamingPolicy        = JsonNamingPolicy.CamelCase
+        }) ?? throw new InvalidOperationException($"Failed to deserialize {Path.GetFileName(configPath)}");
     }
 
     private ApplicationContext CreateApplicationContext()
