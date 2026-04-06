@@ -28,14 +28,17 @@ CodeLogic/                          ← this repo
 │   │   └── Application/        ← IApplication + Plugins (app-managed)
 │   │       └── Plugins/
 │   │
-│   ├── ICodeLogicRuntime.cs
-│   ├── CodeLogicRuntime.cs
-│   ├── CodeLogic.cs
-│   ├── Libraries.cs
-│   ├── Plugins.cs
-│   ├── CodeLogicEnvironment.cs
-│   ├── CodeLogicOptions.cs
-│   └── CodeLogicConfiguration.cs
+│   ├── Runtime/                ← orchestrator internals
+│   │   ├── ICodeLogicRuntime.cs
+│   │   ├── CodeLogicRuntime.cs
+│   │   ├── CodeLogicOptions.cs
+│   │   ├── CodeLogicConfiguration.cs
+│   │   ├── HealthReport.cs
+│   │   └── InitializationResult.cs
+│   │
+│   ├── CodeLogic.cs            ← static facade (public entry point)
+│   ├── Libraries.cs            ← static accessor (framework-managed libs)
+│   └── CodeLogicEnvironment.cs ← global static
 │
 ├── docs/
 │   ├── BUILD_PLAN.md
@@ -72,11 +75,15 @@ CodeLogic.Framework.Application          IApplication, ApplicationContext, Appli
 CodeLogic.Framework.Application.Plugins  IPlugin, PluginContext, PluginManifest, PluginManager
                                          PluginLoadContext, LoadedPlugin, PluginState, PluginOptions
 
-CodeLogic                       CodeLogic (static), Libraries (static), Plugins (static)
-                                ICodeLogicRuntime, CodeLogicRuntime
+CodeLogic                       CodeLogic (static facade), Libraries (static accessor)
                                 CodeLogicEnvironment
+                                ICodeLogicRuntime, CodeLogicRuntime
                                 CodeLogicOptions, CodeLogicConfiguration
                                 InitializationResult, HealthReport
+
+Note: No static Plugins accessor — plugins are app-managed.
+      Apps instantiate PluginManager directly:
+        new PluginManager(CodeLogic.GetEventBus(), options)
 ```
 
 ---
