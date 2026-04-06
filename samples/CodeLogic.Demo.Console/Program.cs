@@ -1,139 +1,115 @@
 using CodeLogic;
-using CodeLogic.Core.Configuration;
-using CodeLogic.Core.Events;
-using CodeLogic.Core.Localization;
-using CodeLogic.Framework.Application;
+using CodeLogic.Demo.Console.Application;
+using CodeLogic.Demo.Console.Config;
+using CodeLogic.Demo.Console.Events;
+using CodeLogic.Demo.Console.Localization;
 
-// ════════════════════════════════════════════════════════════════
-//   CodeLogic 3 — Console Demo
-//   Shows: boot sequence, config, localization, event bus
-// ════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// Program.cs — Entry point. Boot sequence only.
+//
+// Responsibilities:
+//   - Configure CodeLogic paths and options
+//   - Register the application
+//   - Run the 3-step startup: Configure → Start
+//   - Hand off to the main loop
+//   - Ensure graceful shutdown
+//
+// Nothing domain-specific lives here. Everything is delegated to typed classes.
+// ─────────────────────────────────────────────────────────────────────────────
 
-Console.WriteLine("════════════════════════════════════════════════════════");
-Console.WriteLine("   CodeLogic 3.0 — Console Demo");
-Console.WriteLine("════════════════════════════════════════════════════════\n");
+// ── Step 1: Initialize the framework ──────────────────────────────────────
+// Sets up paths, reads CLI args, scaffolds directories on first run,
+// loads CodeLogic.json. Does NOT start any libraries yet.
 
-// 1. Initialize — sets up paths, CLI args, first-run scaffold
-var result = await CodeLogic.CodeLogic.InitializeAsync(opts =>
+var initResult = await CodeLogic.CodeLogic.InitializeAsync(opts =>
 {
-    opts.FrameworkRootPath    = "data/codelogic";
-    opts.ApplicationRootPath  = "data/app";
+    opts.FrameworkRootPath    = "data/codelogic"; // framework configs + lib data
+    opts.ApplicationRootPath  = "data/app";        // app config + localization
     opts.AppVersion           = "1.0.0";
-    opts.HandleShutdownSignals = true;
+    opts.HandleShutdownSignals = true;             // hooks CTRL+C → StopAsync()
 });
 
-if (!result.Success || result.ShouldExit)
+if (!initResult.Success || initResult.ShouldExit)
 {
-    Console.WriteLine($"Init: {result.Message}");
+    Console.Error.WriteLine($"Startup failed: {initResult.Message}");
     return;
 }
 
-// 2. Register the demo application
+// ── Step 2: Register the application ──────────────────────────────────────
+// Tells the framework which IApplication to run. Must be called before
+// ConfigureAsync so the app participates in config/localization generation.
+
 CodeLogic.CodeLogic.RegisterApplication(new DemoApplication());
 
-// 3. Configure — generates config/localization files, wires contexts
+// ── Step 3: Configure ─────────────────────────────────────────────────────
+// Discovers libraries (if any), runs OnConfigureAsync on all of them,
+// generates config/localization files that don't exist yet, loads them all.
+
 await CodeLogic.CodeLogic.ConfigureAsync();
 
-// 4. Start — runs OnInitializeAsync + OnStartAsync on the app
+// ── Step 4: Start ─────────────────────────────────────────────────────────
+// Initializes + starts all libraries, then initializes + starts the app.
+// After this returns, everything is running and ready.
+
 await CodeLogic.CodeLogic.StartAsync();
 
-Console.WriteLine("\n--- Framework started ---\n");
+// ── Main loop ─────────────────────────────────────────────────────────────
+// At this point the framework is fully running. The app can do its work.
 
-// 5. Use the event bus
-var bus = CodeLogic.CodeLogic.GetEventBus();
-
-using var sub = bus.Subscribe<DemoEvent>(e =>
-    Console.WriteLine($"[EventBus] {e.Message}"));
-
-bus.Publish(new DemoEvent("Hello from the event bus!"));
-
-// 6. Read config and localization from application context
-var ctx = CodeLogic.CodeLogic.GetApplicationContext()!;
-
+var ctx    = CodeLogic.CodeLogic.GetApplicationContext()!;
 var config = ctx.Configuration.Get<DemoConfig>();
-Console.WriteLine($"[Config]        AppTitle={config.AppTitle}, MaxItems={config.MaxItems}");
+var bus    = CodeLogic.CodeLogic.GetEventBus();
 
-var strings = ctx.Localization.Get<DemoStrings>();
-Console.WriteLine($"[Localization]  Welcome={strings.Welcome}");
+Console.WriteLine($"\nMachine : {CodeLogicEnvironment.MachineName}");
+Console.WriteLine($"Version : {CodeLogicEnvironment.AppVersion}");
+Console.WriteLine($"Debug   : {CodeLogicEnvironment.IsDebugging}");
+Console.WriteLine($"Batch   : {config.MaxItemsPerBatch} items");
+Console.WriteLine();
 
-// 7. Environment info
-Console.WriteLine($"[Environment]   Machine={CodeLogicEnvironment.MachineName}  " +
-                  $"App={CodeLogicEnvironment.AppVersion}  " +
-                  $"Debugging={CodeLogicEnvironment.IsDebugging}");
+// Subscribe to work events from Program scope
+using var workSub = bus.Subscribe<WorkCompletedEvent>(e =>
+{
+    var icon = e.Success ? "+" : "x";
+    Console.WriteLine($"  [{icon}] {e.TaskName} — {e.Duration.TotalMilliseconds:0}ms");
+});
 
-// 8. Health report
-Console.WriteLine("\n[Health] Checking...");
-var health = await CodeLogic.CodeLogic.GetHealthAsync();
-Console.WriteLine(health.ToConsoleString());
+Console.WriteLine("Commands: [W] Do work   [H] Health   [Q] Quit\n");
 
-// 9. Graceful shutdown
-Console.WriteLine("Press any key to shut down...");
-Console.ReadKey(intercept: true);
+// Simple REPL loop
+bool running = true;
+while (running)
+{
+    if (!Console.KeyAvailable)
+    {
+        await Task.Delay(50);
+        continue;
+    }
+
+    var key = Console.ReadKey(intercept: true).Key;
+    switch (key)
+    {
+        case ConsoleKey.W:
+            // Simulate work and publish a result event
+            bus.Publish(new UserActionEvent("do-work"));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await Task.Delay(config.WorkIntervalMs); // simulated work
+            sw.Stop();
+            bus.Publish(new WorkCompletedEvent("SimulatedBatch", sw.Elapsed, Success: true));
+            break;
+
+        case ConsoleKey.H:
+            // Print a live health report
+            var health = await CodeLogic.CodeLogic.GetHealthAsync();
+            Console.WriteLine(health.ToConsoleString());
+            break;
+
+        case ConsoleKey.Q:
+            running = false;
+            break;
+    }
+}
+
+// ── Step 5: Graceful shutdown ──────────────────────────────────────────────
+// Stops the app first, then all libraries in reverse dependency order.
 
 await CodeLogic.CodeLogic.StopAsync();
-Console.WriteLine("\nGoodbye!");
-
-
-// ── Application ───────────────────────────────────────────────────────────
-
-class DemoApplication : IApplication
-{
-    public ApplicationManifest Manifest { get; } = new()
-    {
-        Id          = "demo.console",
-        Name        = "CodeLogic Console Demo",
-        Version     = "1.0.0",
-        Description = "Demonstrates the CodeLogic 3 boot sequence",
-        Author      = "CodeLogic"
-    };
-
-    public async Task OnConfigureAsync(ApplicationContext context)
-    {
-        context.Configuration.Register<DemoConfig>();
-        context.Localization.Register<DemoStrings>();
-        context.Logger.Info("DemoApplication configured");
-        await Task.CompletedTask;
-    }
-
-    public async Task OnInitializeAsync(ApplicationContext context)
-    {
-        context.Logger.Info("DemoApplication initialized");
-        await Task.CompletedTask;
-    }
-
-    public async Task OnStartAsync(ApplicationContext context)
-    {
-        context.Logger.Info("DemoApplication started");
-        context.Events.Publish(new DemoEvent("Application has started!"));
-        await Task.CompletedTask;
-    }
-
-    public async Task OnStopAsync()
-    {
-        Console.WriteLine("[App] Stopping gracefully...");
-        await Task.CompletedTask;
-    }
-}
-
-// ── Custom event ──────────────────────────────────────────────────────────
-
-record DemoEvent(string Message) : IEvent;
-
-// ── Config model ──────────────────────────────────────────────────────────
-
-class DemoConfig : ConfigModelBase
-{
-    public string AppTitle { get; set; } = "My Demo App";
-    public int MaxItems { get; set; } = 100;
-    public bool EnableFeatureX { get; set; } = false;
-}
-
-// ── Localization model ────────────────────────────────────────────────────
-
-[LocalizationSection("demo")]
-class DemoStrings : LocalizationModelBase
-{
-    public string Welcome { get; set; } = "Welcome to CodeLogic!";
-    public string Goodbye { get; set; } = "Goodbye!";
-    public string ErrorOccurred { get; set; } = "An error occurred: {0}";
-}
