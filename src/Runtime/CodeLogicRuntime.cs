@@ -27,6 +27,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
     private LibraryManager? _libraryManager;
     private IApplication? _application;
     private ApplicationContext? _applicationContext;
+    private System.Threading.Timer? _healthTimer;
     private bool _initialized;
     private bool _shutdownRegistered;
 
@@ -253,9 +254,6 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
                 await _libraryManager.InitializeAllAsync();
                 await _libraryManager.StartAllAsync();
-
-                if (config.HealthChecks.Enabled)
-                    _libraryManager.StartHealthCheckTimer(config.HealthChecks.IntervalSeconds);
             }
 
             if (_application != null && _applicationContext != null)
@@ -265,8 +263,55 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
                 await _application.OnStartAsync(_applicationContext);
                 _frameworkLogger.Info($"Application started: {_application.Manifest.Name}");
             }
+
+            // Start the aggregate health check timer AFTER all components are running.
+            // Covers libraries, plugins, and the application — not just libraries.
+            if (config.HealthChecks.Enabled)
+                StartHealthTimer(config.HealthChecks.IntervalSeconds);
         }
         finally { _lock.Release(); }
+    }
+
+    // ── Aggregate health timer ────────────────────────────────────────────────
+
+    private void StartHealthTimer(int intervalSeconds)
+    {
+        _healthTimer?.Dispose();
+        var interval = TimeSpan.FromSeconds(intervalSeconds);
+        _healthTimer = new System.Threading.Timer(
+            _ => _ = RunScheduledHealthCheckAsync(),
+            null,
+            interval,
+            interval);
+    }
+
+    private async Task RunScheduledHealthCheckAsync()
+    {
+        try
+        {
+            var report = await GetHealthAsync();
+
+            // Publish one aggregate event and one per-component event so subscribers
+            // can react to individual component health changes.
+            _eventBus.Publish(new HealthCheckCompletedEvent(
+                "runtime", report.IsHealthy, report.IsHealthy ? "Healthy" : "Degraded or unhealthy"));
+
+            foreach (var (id, status) in report.Libraries)
+                _eventBus.Publish(new HealthCheckCompletedEvent(id, status.IsHealthy, status.Message));
+
+            foreach (var (id, status) in report.Plugins)
+                _eventBus.Publish(new HealthCheckCompletedEvent(id, status.IsHealthy, status.Message));
+
+            if (report.Application != null)
+                _eventBus.Publish(new HealthCheckCompletedEvent(
+                    _application?.Manifest.Id ?? "application",
+                    report.Application.IsHealthy,
+                    report.Application.Message));
+        }
+        catch (Exception ex)
+        {
+            _frameworkLogger.Error($"Scheduled health check error: {ex.Message}", ex);
+        }
     }
 
     // ── Stop ─────────────────────────────────────────────────────────────────
@@ -276,6 +321,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         await _lock.WaitAsync();
         try
         {
+            _healthTimer?.Dispose();
+            _healthTimer = null;
+
             _eventBus.Publish(new ShutdownRequestedEvent("StopAsync called"));
 
             if (_application != null)
@@ -308,6 +356,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         await _lock.WaitAsync();
         try
         {
+            _healthTimer?.Dispose();
+            _healthTimer = null;
+
             if (_application != null)
                 try { await _application.OnStopAsync(); } catch { }
 

@@ -119,21 +119,24 @@ public interface IConfigurationManager
 
 ## Environment Overrides
 
-For each `config.X.json`, CodeLogic also loads `config.X.Development.json` when running in development mode, merging the override on top. Use this for local settings that should not be committed to source control.
+The framework-level config file (`CodeLogic.json`) has a development variant: `CodeLogic.Development.json`. When running in development mode (DEBUG build or debugger attached), the framework loads `CodeLogic.Development.json` **instead of** `CodeLogic.json`. This is a full replacement — not a merge or overlay — so the development file must be complete.
 
-Example:
-```
-config.database.json             ← default values, committed
-config.database.Development.json ← local overrides, git-ignored
-```
+Use this for local log levels and developer settings that should not be committed to source control:
 
 ```json
-// config.database.Development.json
+// Framework/CodeLogic.Development.json  ← add to .gitignore
 {
-  "ConnectionString": "Data Source=dev-local.db",
-  "MaxConnections": 5
+  "logging": {
+    "globalLevel": "Debug",
+    "enableConsoleOutput": true,
+    "consoleMinimumLevel": "Debug"
+  }
 }
 ```
+
+> **Important**: because this is a full replacement (not a merge), any settings you omit revert to their defaults — copy all the sections you care about from `CodeLogic.json` and then change only what differs.
+
+Per-component config files (`config.database.json`, etc.) do not have a development variant. Use environment-specific values directly in the config file, or use different config files per deployment environment.
 
 ---
 
