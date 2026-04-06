@@ -46,9 +46,10 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
             // Merge CLI args (CLI wins)
             var cli = CliArgParser.Parse();
-            if (cli.GenerateConfigs)      _options.GenerateConfigs      = true;
-            if (cli.GenerateConfigsForce) _options.GenerateConfigsForce = true;
-            if (cli.GenerateConfigsFor != null) _options.GenerateConfigsFor = cli.GenerateConfigsFor;
+            if (cli.GenerateConfigs)           _options.GenerateConfigs      = true;
+            if (cli.GenerateConfigsForce)      _options.GenerateConfigsForce = true;
+            if (cli.GenerateConfigsFor != null) _options.GenerateConfigsFor  = cli.GenerateConfigsFor;
+            if (cli.DryRun)                    _options.DryRun               = true;
 
             // Handle exit-only CLI modes before anything else
             if (cli.ShowVersion)
@@ -194,7 +195,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
                 var appCtx = CreateApplicationContext();
 
                 await _application.OnConfigureAsync(appCtx);
-                await appCtx.Configuration.GenerateAllDefaultsAsync();
+                await appCtx.Configuration.GenerateAllDefaultsAsync(opts.GenerateConfigsForce);
                 await appCtx.Configuration.LoadAllAsync();
                 await appCtx.Localization.GenerateAllTemplatesAsync(config.Localization.SupportedCultures);
                 await appCtx.Localization.LoadAllAsync(config.Localization.SupportedCultures);
@@ -202,6 +203,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
                 _applicationContext = appCtx; // only assign after full success
                 _frameworkLogger.Info($"Application configured: {_application.Manifest.Name}");
             }
+
         }
         finally { _lock.Release(); }
     }
@@ -215,10 +217,40 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         try
         {
             var config = GetConfigOrThrow();
+            var opts   = GetOptionsOrThrow();
+
+            // --dry-run: stop after Configure (libraries+app already configured in ConfigureAsync).
+            // Useful for CI/CD validation that config files are present and valid.
+            if (opts.DryRun)
+            {
+                _frameworkLogger.Info("Dry-run mode — skipping Start phases.");
+                Console.WriteLine("Dry run complete — all config files validated successfully.");
+                return;
+            }
 
             if (_libraryManager != null)
             {
+                // ConfigureAllAsync registers config types and generates defaults for each library.
                 await _libraryManager.ConfigureAllAsync();
+
+                // --generate-configs --force: overwrite existing config files now that all
+                // library types are registered. Regular (non-force) generation already
+                // happened inside ConfigureAllAsync for any missing files.
+                if (opts.GenerateConfigs && opts.GenerateConfigsForce)
+                {
+                    _frameworkLogger.Info("Force-regenerating library config files (--generate-configs --force)...");
+                    await _libraryManager.ForceRegenerateAllConfigsAsync(opts.GenerateConfigsFor ?? []);
+                }
+
+                // --generate-configs [--force]: exit after config generation if requested.
+                // Application config was already generated during ConfigureAsync.
+                if (opts.GenerateConfigs && opts.ExitAfterGenerate)
+                {
+                    _frameworkLogger.Info("Config generation complete — exiting (--generate-configs).");
+                    Console.WriteLine("Config files generated. Edit them and restart.");
+                    return;
+                }
+
                 await _libraryManager.InitializeAllAsync();
                 await _libraryManager.StartAllAsync();
 

@@ -128,6 +128,52 @@ public sealed class PluginManager : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Registers an in-process plugin (already instantiated and running) with the PluginManager
+    /// so that it participates in health checks, <see cref="GetLoadedPlugins"/>, and graceful
+    /// shutdown via <see cref="UnloadAllAsync"/>.
+    /// <para>
+    /// Use this when hosting a plugin in the same process/assembly (e.g. demos, tests) rather
+    /// than loading it from a separate DLL via <see cref="LoadPluginAsync"/>. The caller is
+    /// responsible for running the full 4-phase lifecycle before calling this method.
+    /// </para>
+    /// </summary>
+    /// <param name="plugin">The already-started plugin instance to register.</param>
+    /// <param name="context">The <see cref="PluginContext"/> the plugin was started with.</param>
+    public Task RegisterInProcessPluginAsync(IPlugin plugin, PluginContext context)
+    {
+        var manifest = plugin.Manifest;
+
+        if (_plugins.ContainsKey(manifest.Id))
+        {
+            Console.WriteLine($"  ! Plugin '{manifest.Name}' already registered");
+            return Task.CompletedTask;
+        }
+
+        // In-process plugins don't have an AssemblyLoadContext — use a no-op sentinel.
+        var noOpLoadCtx = new PluginLoadContext(typeof(PluginManager).Assembly.Location);
+
+        _plugins[manifest.Id] = new LoadedPlugin
+        {
+            Instance      = plugin,
+            Manifest      = manifest,
+            AssemblyPath  = typeof(PluginManager).Assembly.Location,
+            LoadContext   = noOpLoadCtx,
+            WeakReference = new WeakReference(noOpLoadCtx),
+            Context       = context,
+            State         = PluginState.Started
+        };
+
+        _eventBus.Publish(new PluginLoadedEvent(manifest.Id, manifest.Name));
+        OnPluginLoaded?.Invoke(manifest.Id);
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"  + Plugin registered (in-process): {manifest.Name} v{manifest.Version}");
+        Console.ResetColor();
+
+        return Task.CompletedTask;
+    }
+
     // ── Unload ───────────────────────────────────────────────────────────────
 
     public async Task UnloadPluginAsync(string pluginId)

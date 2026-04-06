@@ -60,6 +60,14 @@ public sealed class CodeLogicOptions
     /// </summary>
     public bool ExitAfterGenerate { get; set; } = false;
 
+    /// <summary>
+    /// When true, the framework runs only the Configure phase (validates all config files exist
+    /// and are valid) and then exits without starting any libraries or the application.
+    /// Useful for CI/CD pipelines that validate configuration without running the application.
+    /// Triggered by the <c>--dry-run</c> CLI flag.
+    /// </summary>
+    public bool DryRun { get; set; } = false;
+
     // === Shutdown ===
 
     /// <summary>

@@ -310,6 +310,23 @@ public sealed class LibraryManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Force-regenerates config defaults for all configured libraries, overwriting existing files.
+    /// Only runs for libraries that have already completed their Configure phase (Context is set).
+    /// Pass an empty array to include all libraries; pass specific IDs to scope generation.
+    /// </summary>
+    public async Task ForceRegenerateAllConfigsAsync(string[] scopeToIds)
+    {
+        foreach (var loaded in _libraries.Where(l => l.Context != null))
+        {
+            if (scopeToIds.Length > 0 &&
+                !scopeToIds.Any(id => string.Equals(id, loaded.Manifest.Id, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            await loaded.Context!.Configuration.GenerateAllDefaultsAsync(force: true);
+        }
+    }
+
     // ── Accessors ────────────────────────────────────────────────────────────
 
     public T? GetLibrary<T>() where T : class, ILibrary =>

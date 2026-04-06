@@ -14,8 +14,8 @@ public interface IConfigurationManager
     /// <summary>Gets a loaded config instance. Throws if not loaded.</summary>
     T Get<T>() where T : ConfigModelBase, new();
 
-    /// <summary>Generates the config file with defaults if it doesn't exist.</summary>
-    Task GenerateDefaultAsync<T>() where T : ConfigModelBase, new();
+    /// <summary>Generates the config file with defaults if it doesn't exist, or overwrites it when <paramref name="force"/> is true.</summary>
+    Task GenerateDefaultAsync<T>(bool force = false) where T : ConfigModelBase, new();
 
     /// <summary>Loads a config from disk. Generates defaults if missing. Validates after load.</summary>
     Task LoadAsync<T>() where T : ConfigModelBase, new();
@@ -25,8 +25,8 @@ public interface IConfigurationManager
     /// </summary>
     Task SaveAsync<T>(T config) where T : ConfigModelBase, new();
 
-    /// <summary>Generates defaults for all registered types that don't have files yet.</summary>
-    Task GenerateAllDefaultsAsync();
+    /// <summary>Generates defaults for all registered types that don't have files yet, or overwrites them when <paramref name="force"/> is true.</summary>
+    Task GenerateAllDefaultsAsync(bool force = false);
 
     /// <summary>Loads all registered configs.</summary>
     Task LoadAllAsync();

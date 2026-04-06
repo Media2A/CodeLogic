@@ -43,10 +43,10 @@ public sealed class ConfigurationManager : IConfigurationManager
             $"Call LoadAsync<{typeof(T).Name}>() or LoadAllAsync() first.");
     }
 
-    public async Task GenerateDefaultAsync<T>() where T : ConfigModelBase, new()
+    public async Task GenerateDefaultAsync<T>(bool force = false) where T : ConfigModelBase, new()
     {
         var path = GetFilePath<T>();
-        if (File.Exists(path)) return;
+        if (!force && File.Exists(path)) return;
 
         var defaultConfig = new T();
         await WriteToFileAsync(path, defaultConfig);
@@ -87,7 +87,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         _loaded[typeof(T)] = config;
     }
 
-    public async Task GenerateAllDefaultsAsync()
+    public async Task GenerateAllDefaultsAsync(bool force = false)
     {
         foreach (var type in _registered.Keys)
         {
@@ -97,7 +97,7 @@ public sealed class ConfigurationManager : IConfigurationManager
                     $"Reflection failed: method '{nameof(GenerateDefaultAsync)}' not found.");
 
             var generic = method.MakeGenericMethod(type);
-            var task = generic.Invoke(this, null) as Task
+            var task = generic.Invoke(this, [force]) as Task
                 ?? throw new InvalidOperationException(
                     $"Reflection failed: '{nameof(GenerateDefaultAsync)}<{type.Name}>' returned null.");
 

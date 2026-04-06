@@ -201,5 +201,9 @@ static async Task LoadInProcessPluginAsync(PluginManager manager, IPlugin plugin
     await plugin.OnInitializeAsync(pluginCtx);
     await plugin.OnStartAsync(pluginCtx);
 
+    // Register with the PluginManager so the plugin appears in GetLoadedPlugins(),
+    // health checks, and is gracefully unloaded on shutdown via UnloadAllAsync().
+    await manager.RegisterInProcessPluginAsync(plugin, pluginCtx);
+
     Console.WriteLine($"  [Plugins] {plugin.Manifest.Name} loaded and started");
 }
