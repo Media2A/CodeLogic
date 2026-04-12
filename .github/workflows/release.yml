@@ -42,7 +42,7 @@ jobs:
             throw "Could not read <Version> from src/CodeLogic.csproj"
           }
 
-          $timestamp = Get-Date -Format 'yyyyMMdd.HHmmss'
+          $timestamp = Get-Date -Format 'yyyyMMddHHmmss'
           $buildVersion = "$baseVersion-build.$timestamp.${env:GITHUB_RUN_NUMBER}"
           $tag = "v$buildVersion"
 
