@@ -20,6 +20,14 @@ public sealed class PluginLoadContext : AssemblyLoadContext
 
     protected override Assembly? Load(AssemblyName assemblyName)
     {
+        var shared = AppDomain.CurrentDomain
+            .GetAssemblies()
+            .FirstOrDefault(assembly =>
+                string.Equals(assembly.GetName().Name, assemblyName.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (shared is not null)
+            return shared;
+
         var path = _resolver.ResolveAssemblyToPath(assemblyName);
         return path != null ? LoadFromAssemblyPath(path) : null;
     }
