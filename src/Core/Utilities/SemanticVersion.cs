@@ -5,10 +5,14 @@ namespace CodeLogic.Core.Utilities;
 /// </summary>
 public sealed class SemanticVersion : IComparable<SemanticVersion>
 {
+    /// <summary>Gets the major version component.</summary>
     public int Major { get; }
+    /// <summary>Gets the minor version component.</summary>
     public int Minor { get; }
+    /// <summary>Gets the patch version component.</summary>
     public int Patch { get; }
 
+    /// <summary>Initializes a new semantic version with the specified components.</summary>
     public SemanticVersion(int major, int minor, int patch)
     {
         if (major < 0) throw new ArgumentOutOfRangeException(nameof(major));
@@ -64,6 +68,7 @@ public sealed class SemanticVersion : IComparable<SemanticVersion>
         }
     }
 
+    /// <inheritdoc />
     public int CompareTo(SemanticVersion? other)
     {
         if (other is null) return 1;
@@ -77,35 +82,44 @@ public sealed class SemanticVersion : IComparable<SemanticVersion>
         return Patch.CompareTo(other.Patch);
     }
 
+    /// <inheritdoc />
     public override bool Equals(object? obj) =>
         obj is SemanticVersion other && CompareTo(other) == 0;
 
+    /// <inheritdoc />
     public override int GetHashCode() =>
         HashCode.Combine(Major, Minor, Patch);
 
+    /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}.{Patch}";
 
+    /// <summary>Determines whether two semantic versions are equal.</summary>
     public static bool operator ==(SemanticVersion? left, SemanticVersion? right) =>
         left is null ? right is null : left.CompareTo(right) == 0;
 
+    /// <summary>Determines whether two semantic versions are not equal.</summary>
     public static bool operator !=(SemanticVersion? left, SemanticVersion? right) =>
         !(left == right);
 
+    /// <summary>Determines whether the left version is less than the right version.</summary>
     public static bool operator <(SemanticVersion? left, SemanticVersion? right)
     {
         if (left is null) return right is not null;
         return left.CompareTo(right) < 0;
     }
 
+    /// <summary>Determines whether the left version is greater than the right version.</summary>
     public static bool operator >(SemanticVersion? left, SemanticVersion? right)
     {
         if (left is null) return false;
         return left.CompareTo(right) > 0;
     }
 
+    /// <summary>Determines whether the left version is less than or equal to the right version.</summary>
     public static bool operator <=(SemanticVersion? left, SemanticVersion? right) =>
         !(left > right);
 
+    /// <summary>Determines whether the left version is greater than or equal to the right version.</summary>
     public static bool operator >=(SemanticVersion? left, SemanticVersion? right) =>
         !(left < right);
 }

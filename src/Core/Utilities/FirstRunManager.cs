@@ -11,6 +11,7 @@ public static class FirstRunManager
 {
     private const string MarkerFileName = ".codelogic";
 
+    /// <summary>Returns true if the framework has not yet been initialized at the given root path.</summary>
     public static bool IsFirstRun(string frameworkRootPath)
     {
         return !File.Exists(GetMarkerPath(frameworkRootPath));
@@ -44,11 +45,13 @@ public static class FirstRunManager
         return result;
     }
 
+    /// <summary>Writes the first-run marker file to indicate scaffolding is complete.</summary>
     public static async Task CompleteAsync(string frameworkRootPath)
     {
         await CreateMarkerAsync(frameworkRootPath);
     }
 
+    /// <summary>Deletes the first-run marker, causing the next launch to re-scaffold.</summary>
     public static void Reset(string frameworkRootPath)
     {
         var marker = GetMarkerPath(frameworkRootPath);
@@ -176,7 +179,10 @@ public static class FirstRunManager
 /// </summary>
 public sealed class FirstRunResult
 {
+    /// <summary>Whether scaffolding completed successfully.</summary>
     public bool Success { get; set; }
+    /// <summary>Error message if scaffolding failed, otherwise null.</summary>
     public string? Error { get; set; }
+    /// <summary>Number of directories created during scaffolding.</summary>
     public int DirectoriesCreated { get; set; }
 }

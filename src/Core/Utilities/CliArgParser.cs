@@ -5,13 +5,21 @@ namespace CodeLogic.Core.Utilities;
 /// </summary>
 public sealed class ParsedCliArgs
 {
+    /// <summary>Whether the --generate-configs flag was specified.</summary>
     public bool GenerateConfigs { get; init; }
+    /// <summary>Whether the --generate-configs-force flag was specified.</summary>
     public bool GenerateConfigsForce { get; init; }
+    /// <summary>Library IDs to scope config generation to, or null for all.</summary>
     public string[]? GenerateConfigsFor { get; init; }  // null = all
+    /// <summary>Whether to exit after config generation completes.</summary>
     public bool ExitAfterGenerate { get; init; }
+    /// <summary>Whether the --dry-run flag was specified.</summary>
     public bool DryRun { get; init; }
+    /// <summary>Whether the --version flag was specified.</summary>
     public bool ShowVersion { get; init; }
+    /// <summary>Whether the --info flag was specified.</summary>
     public bool ShowInfo { get; init; }
+    /// <summary>Whether the --health flag was specified.</summary>
     public bool ShowHealth { get; init; }
 }
 

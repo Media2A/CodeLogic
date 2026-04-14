@@ -1,5 +1,8 @@
 namespace CodeLogic.Framework.Application.Plugins;
 
+/// <summary>
+/// Configuration options for the plugin manager.
+/// </summary>
 public sealed class PluginOptions
 {
     /// <summary>Base directory where plugin folders live. Default: {FrameworkRoot}/Plugins</summary>

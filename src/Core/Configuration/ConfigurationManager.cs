@@ -22,17 +22,20 @@ public sealed class ConfigurationManager : IConfigurationManager
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    /// <summary>Initializes the configuration manager with the specified base directory.</summary>
     public ConfigurationManager(string baseDirectory)
     {
         _baseDirectory = baseDirectory;
         Directory.CreateDirectory(baseDirectory);
     }
 
+    /// <inheritdoc />
     public void Register<T>(string? subConfigName = null) where T : ConfigModelBase, new()
     {
         _registered[typeof(T)] = subConfigName ?? string.Empty;
     }
 
+    /// <inheritdoc />
     public T Get<T>() where T : ConfigModelBase, new()
     {
         if (_loaded.TryGetValue(typeof(T), out var config))
@@ -43,6 +46,7 @@ public sealed class ConfigurationManager : IConfigurationManager
             $"Call LoadAsync<{typeof(T).Name}>() or LoadAllAsync() first.");
     }
 
+    /// <inheritdoc />
     public async Task GenerateDefaultAsync<T>(bool force = false) where T : ConfigModelBase, new()
     {
         var path = GetFilePath<T>();
@@ -52,6 +56,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         await WriteToFileAsync(path, defaultConfig);
     }
 
+    /// <inheritdoc />
     public async Task LoadAsync<T>(bool generateIfMissing = true) where T : ConfigModelBase, new()
     {
         var path = GetFilePath<T>();
@@ -68,6 +73,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         await LoadExistingAsync<T>();
     }
 
+    /// <inheritdoc />
     public async Task SaveAsync<T>(T config) where T : ConfigModelBase, new()
     {
         // Validate BEFORE writing — never persist invalid config
@@ -83,6 +89,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         _loaded[typeof(T)] = config;
     }
 
+    /// <inheritdoc />
     public async Task GenerateAllDefaultsAsync(bool force = false)
     {
         foreach (var type in _registered.Keys)
@@ -101,6 +108,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         }
     }
 
+    /// <inheritdoc />
     public async Task LoadAllAsync(bool generateIfMissing = true)
     {
         foreach (var type in _registered.Keys)
@@ -119,6 +127,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         }
     }
 
+    /// <inheritdoc />
     public async Task ValidateAllAsync(bool allowMissingFiles = false)
     {
         foreach (var type in _registered.Keys)
@@ -137,6 +146,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         }
     }
 
+    /// <inheritdoc />
     public async Task ReloadAsync<T>() where T : ConfigModelBase, new()
     {
         // Same as LoadAsync but always re-reads from disk even if already loaded
@@ -160,6 +170,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         _loaded[typeof(T)] = config;
     }
 
+    /// <inheritdoc />
     public async Task ReloadAllAsync()
     {
         foreach (var type in _registered.Keys)
@@ -178,6 +189,7 @@ public sealed class ConfigurationManager : IConfigurationManager
         }
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<string> GetRegisteredFilePaths() =>
         _registered.Keys.Select(GetFilePath).ToList();
 

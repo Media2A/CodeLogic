@@ -18,14 +18,20 @@ public sealed class LibraryManager : IDisposable
     private readonly Dictionary<string, ILibrary> _librariesById = new();
     private readonly IEventBus _eventBus;
 
-    // Configuration — set by CodeLogicRuntime after loading CodeLogic.json
+    /// <summary>Logging options applied to library loggers.</summary>
     public LoggingOptions LoggingOptions { get; set; } = new();
+    /// <summary>Root path of the CodeLogic framework directory.</summary>
     public string FrameworkRootPath { get; set; } = "CodeLogic";
+    /// <summary>Default culture used for localization.</summary>
     public string DefaultCulture { get; set; } = "en-US";
+    /// <summary>List of cultures supported for localization.</summary>
     public IReadOnlyList<string> SupportedCultures { get; set; } = ["en-US"];
+    /// <summary>Whether to resolve and validate library dependencies.</summary>
     public bool EnableDependencyResolution { get; set; } = true;
+    /// <summary>Glob pattern used to discover library directories.</summary>
     public string LibraryDiscoveryPattern { get; set; } = "CL.*";
 
+    /// <summary>Initializes a new library manager with the specified event bus.</summary>
     public LibraryManager(IEventBus eventBus)
     {
         _eventBus = eventBus;
@@ -34,6 +40,7 @@ public sealed class LibraryManager : IDisposable
 
     // ── Discovery ────────────────────────────────────────────────────────────
 
+    /// <summary>Discovers library DLLs matching the discovery pattern in the Libraries directory.</summary>
     public List<string> Discover()
     {
         var librariesRoot = Path.Combine(FrameworkRootPath, "Libraries");
@@ -86,6 +93,7 @@ public sealed class LibraryManager : IDisposable
         finally { _lock.Release(); }
     }
 
+    /// <summary>Loads libraries from the specified assembly paths.</summary>
     public async Task LoadLibrariesAsync(IReadOnlyList<string> libraryPaths)
     {
         await _lock.WaitAsync();
@@ -129,6 +137,13 @@ public sealed class LibraryManager : IDisposable
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Configures all loaded libraries in dependency order, optionally generating missing config files.
+    /// </summary>
+    /// <param name="generateMissingConfigs">When true, generates default config files for libraries that don't have one.</param>
+    /// <param name="forceGenerateConfigs">When true, overwrites existing config files with defaults.</param>
+    /// <param name="configScopeToIds">When set, limits config generation to the specified library IDs.</param>
+    /// <param name="dryRun">When true, validates configuration without applying changes.</param>
     public async Task ConfigureAllAsync(
         bool generateMissingConfigs = true,
         bool forceGenerateConfigs = false,
@@ -193,6 +208,9 @@ public sealed class LibraryManager : IDisposable
         finally { _lock.Release(); }
     }
 
+    /// <summary>
+    /// Initializes all configured libraries in dependency order.
+    /// </summary>
     public async Task InitializeAllAsync()
     {
         await _lock.WaitAsync();
@@ -226,6 +244,9 @@ public sealed class LibraryManager : IDisposable
         finally { _lock.Release(); }
     }
 
+    /// <summary>
+    /// Starts all initialized libraries in dependency order.
+    /// </summary>
     public async Task StartAllAsync()
     {
         await _lock.WaitAsync();
@@ -260,6 +281,9 @@ public sealed class LibraryManager : IDisposable
         finally { _lock.Release(); }
     }
 
+    /// <summary>
+    /// Stops all started libraries in reverse dependency order.
+    /// </summary>
     public async Task StopAllAsync()
     {
         await _lock.WaitAsync();
@@ -289,6 +313,9 @@ public sealed class LibraryManager : IDisposable
 
     // ── Health checks ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Runs health checks on all started libraries and returns their status.
+    /// </summary>
     public async Task<Dictionary<string, HealthStatus>> GetHealthAsync()
     {
         var results = new Dictionary<string, HealthStatus>();
@@ -325,15 +352,27 @@ public sealed class LibraryManager : IDisposable
 
     // ── Accessors ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Gets a loaded library instance by type.
+    /// </summary>
     public T? GetLibrary<T>() where T : class, ILibrary =>
         _libraries.Select(l => l.Instance as T).FirstOrDefault(l => l != null);
 
+    /// <summary>
+    /// Gets a loaded library instance by its manifest ID.
+    /// </summary>
     public ILibrary? GetLibrary(string id) =>
         _librariesById.GetValueOrDefault(id);
 
+    /// <summary>
+    /// Returns all registered library instances.
+    /// </summary>
     public IEnumerable<ILibrary> GetAllLibraries() =>
         _libraries.Select(l => l.Instance);
 
+    /// <summary>
+    /// Returns all loaded library records including state and context.
+    /// </summary>
     public IEnumerable<LoadedLibrary> GetLoadedLibraries() => _libraries.AsReadOnly();
 
     // ── Private helpers ──────────────────────────────────────────────────────
@@ -486,6 +525,7 @@ public sealed class LibraryManager : IDisposable
         return null;
     }
 
+    /// <inheritdoc />
     public void Dispose()
     {
         AppDomain.CurrentDomain.AssemblyResolve -= OnAssemblyResolve;

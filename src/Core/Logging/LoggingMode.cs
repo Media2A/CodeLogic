@@ -1,5 +1,6 @@
 namespace CodeLogic.Core.Logging;
 
+/// <summary>Specifies how log files are organized on disk.</summary>
 public enum LoggingMode
 {
     /// <summary>

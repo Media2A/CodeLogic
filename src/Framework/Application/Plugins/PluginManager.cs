@@ -7,6 +7,9 @@ using CodeLogic.Framework.Libraries;
 
 namespace CodeLogic.Framework.Application.Plugins;
 
+/// <summary>
+/// Manages the full lifecycle of dynamically loaded plugins.
+/// </summary>
 public sealed class PluginManager : IAsyncDisposable
 {
     private readonly IEventBus _eventBus;
@@ -19,10 +22,14 @@ public sealed class PluginManager : IAsyncDisposable
     private readonly object _reloadLock = new();
     private FileSystemWatcher? _watcher;
 
+    /// <summary>Raised when a plugin is successfully loaded.</summary>
     public event Action<string>? OnPluginLoaded;
+    /// <summary>Raised when a plugin is unloaded.</summary>
     public event Action<string>? OnPluginUnloaded;
+    /// <summary>Raised when a plugin encounters an error during load, unload, or reload.</summary>
     public event Action<string, Exception>? OnPluginError;
 
+    /// <summary>Initializes a new plugin manager with the specified dependencies.</summary>
     public PluginManager(
         IEventBus eventBus,
         PluginOptions? options = null,
@@ -44,6 +51,7 @@ public sealed class PluginManager : IAsyncDisposable
 
     // ── Discovery ────────────────────────────────────────────────────────────
 
+    /// <summary>Discovers plugin DLLs in the configured plugins directory.</summary>
     public Task<List<string>> DiscoverAsync()
     {
         var paths = new List<string>();
@@ -60,6 +68,7 @@ public sealed class PluginManager : IAsyncDisposable
 
     // ── Load ─────────────────────────────────────────────────────────────────
 
+    /// <summary>Loads and starts a single plugin from the specified assembly path.</summary>
     public async Task LoadPluginAsync(string pluginPath)
     {
         if (!File.Exists(pluginPath))
@@ -118,6 +127,7 @@ public sealed class PluginManager : IAsyncDisposable
         }
     }
 
+    /// <summary>Discovers and loads all plugins from the plugins directory.</summary>
     public async Task LoadAllAsync()
     {
         var paths = await DiscoverAsync();
@@ -176,6 +186,7 @@ public sealed class PluginManager : IAsyncDisposable
 
     // ── Unload ───────────────────────────────────────────────────────────────
 
+    /// <summary>Unloads a plugin by its manifest ID and releases its assembly.</summary>
     public async Task UnloadPluginAsync(string pluginId)
     {
         if (!_plugins.TryGetValue(pluginId, out var loaded))
@@ -216,12 +227,14 @@ public sealed class PluginManager : IAsyncDisposable
         }
     }
 
+    /// <summary>Unloads all currently loaded plugins.</summary>
     public async Task UnloadAllAsync()
     {
         foreach (var id in _plugins.Keys.ToList())
             await UnloadPluginAsync(id);
     }
 
+    /// <summary>Unloads and reloads a plugin from disk.</summary>
     public async Task ReloadPluginAsync(string pluginId)
     {
         if (!_plugins.TryGetValue(pluginId, out var loaded))
@@ -235,12 +248,16 @@ public sealed class PluginManager : IAsyncDisposable
 
     // ── Accessors ────────────────────────────────────────────────────────────
 
+    /// <summary>Gets a loaded plugin instance cast to the specified type.</summary>
     public T? GetPlugin<T>(string pluginId) where T : class, IPlugin =>
         _plugins.TryGetValue(pluginId, out var p) ? p.Instance as T : null;
 
+    /// <summary>Returns all loaded plugin instances.</summary>
     public IEnumerable<IPlugin> GetAllPlugins() => _plugins.Values.Select(p => p.Instance);
+    /// <summary>Returns all loaded plugin records including state and metadata.</summary>
     public IEnumerable<LoadedPlugin> GetLoadedPlugins() => _plugins.Values;
 
+    /// <summary>Runs health checks on all started plugins and returns their status.</summary>
     public async Task<Dictionary<string, HealthStatus>> GetHealthAsync()
     {
         var results = new Dictionary<string, HealthStatus>();
@@ -346,6 +363,7 @@ public sealed class PluginManager : IAsyncDisposable
 
     // ── Disposal ─────────────────────────────────────────────────────────────
 
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         _watcher?.Dispose();

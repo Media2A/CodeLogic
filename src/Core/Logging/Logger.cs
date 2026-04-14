@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace CodeLogic.Core.Logging;
 
+/// <summary>File-based logger that writes entries to disk with optional console output.</summary>
 public sealed class Logger : ILogger
 {
     private readonly string _componentName;
@@ -10,6 +11,7 @@ public sealed class Logger : ILogger
     private readonly LoggingOptions _options;
     private readonly object _lock = new();           // per-instance, not static
 
+    /// <summary>Initializes a new logger for the specified component.</summary>
     public Logger(
         string componentName,
         string componentLogsPath,
@@ -23,11 +25,17 @@ public sealed class Logger : ILogger
         Directory.CreateDirectory(_componentLogsPath);
     }
 
+    /// <inheritdoc />
     public void Trace(string message)    => Log(LogLevel.Trace, message);
+    /// <inheritdoc />
     public void Debug(string message)    => Log(LogLevel.Debug, message);
+    /// <inheritdoc />
     public void Info(string message)     => Log(LogLevel.Info, message);
+    /// <inheritdoc />
     public void Warning(string message)  => Log(LogLevel.Warning, message);
+    /// <inheritdoc />
     public void Error(string message, Exception? exception = null)    => Log(LogLevel.Error, message, exception);
+    /// <inheritdoc />
     public void Critical(string message, Exception? exception = null) => Log(LogLevel.Critical, message, exception);
 
     private void Log(LogLevel level, string message, Exception? exception = null)

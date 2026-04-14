@@ -8,6 +8,7 @@ public sealed class StartupValidator
     private readonly List<string> _errors = new();
     private readonly List<string> _warnings = new();
 
+    /// <summary>Validates the framework root path, directory structure, and configuration.</summary>
     public ValidationResult Validate(string frameworkRootPath)
     {
         _errors.Clear();
@@ -24,7 +25,9 @@ public sealed class StartupValidator
         };
     }
 
+    /// <summary>Returns the list of non-fatal warnings from the last validation run.</summary>
     public IReadOnlyList<string> GetWarnings() => _warnings.AsReadOnly();
+    /// <summary>Returns the list of fatal errors from the last validation run.</summary>
     public IReadOnlyList<string> GetErrors() => _errors.AsReadOnly();
 
     private void ValidateDirectories(string rootPath)
@@ -117,6 +120,8 @@ public sealed class StartupValidator
 /// </summary>
 public sealed class ValidationResult
 {
+    /// <summary>Whether all validation checks passed.</summary>
     public bool IsSuccess { get; init; }
+    /// <summary>Combined error messages if validation failed, otherwise null.</summary>
     public string? ErrorMessage { get; init; }
 }

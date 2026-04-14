@@ -9,6 +9,7 @@ public sealed class EventBus : IEventBus
     private readonly Dictionary<Type, List<SubscriptionEntry>> _subscriptions = new();
     private readonly object _lock = new();
 
+    /// <inheritdoc />
     public void Publish<T>(T @event) where T : IEvent
     {
         var entries = GetSnapshot(typeof(T));
@@ -30,6 +31,7 @@ public sealed class EventBus : IEventBus
         }
     }
 
+    /// <inheritdoc />
     public async Task PublishAsync<T>(T @event) where T : IEvent
     {
         var entries = GetSnapshot(typeof(T));
@@ -49,6 +51,7 @@ public sealed class EventBus : IEventBus
         }
     }
 
+    /// <inheritdoc />
     public IEventSubscription Subscribe<T>(Action<T> handler) where T : IEvent
     {
         var entry = new SubscriptionEntry
@@ -60,6 +63,7 @@ public sealed class EventBus : IEventBus
         return new EventSubscription(this, typeof(T), entry);
     }
 
+    /// <inheritdoc />
     public IEventSubscription SubscribeAsync<T>(Func<T, Task> handler) where T : IEvent
     {
         var entry = new SubscriptionEntry

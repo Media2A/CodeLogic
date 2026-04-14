@@ -39,5 +39,6 @@ public sealed class LocalizationSectionAttribute : Attribute
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class LocalizedStringAttribute : Attribute
 {
+    /// <summary>Optional description for translators explaining the string's context.</summary>
     public string? Description { get; init; }
 }

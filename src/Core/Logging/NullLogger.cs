@@ -11,10 +11,16 @@ public sealed class NullLogger : ILogger
 
     private NullLogger() { }
 
+    /// <inheritdoc />
     public void Trace(string message) { }
+    /// <inheritdoc />
     public void Debug(string message) { }
+    /// <inheritdoc />
     public void Info(string message) { }
+    /// <inheritdoc />
     public void Warning(string message) { }
+    /// <inheritdoc />
     public void Error(string message, Exception? exception = null) { }
+    /// <inheritdoc />
     public void Critical(string message, Exception? exception = null) { }
 }

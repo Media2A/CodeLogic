@@ -1,5 +1,6 @@
 namespace CodeLogic.Core.Events;
 
+/// <summary>Provides publish-subscribe event messaging within the application.</summary>
 public interface IEventBus
 {
     /// <summary>

@@ -59,6 +59,9 @@ public sealed class Error
     /// Creates an error representing an internal/unexpected failure.
     /// HTTP analog: 500 Internal Server Error.
     /// </summary>
+    /// <param name="code">Error code identifying the failure.</param>
+    /// <param name="message">Human-readable error message.</param>
+    /// <param name="details">Optional additional details.</param>
     /// <param name="innerError">Optional chained error that caused this failure.</param>
     public static Error Internal(string code, string message, string? details = null, Error? innerError = null)
         => new(code, message, details, innerError);

@@ -26,6 +26,7 @@ public sealed class LocalizationManager : ILocalizationManager
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    /// <summary>Initializes the localization manager with the specified directory and default culture.</summary>
     public LocalizationManager(string localizationDirectory, string defaultCulture = "en-US")
     {
         _localizationDirectory = localizationDirectory;
@@ -33,11 +34,13 @@ public sealed class LocalizationManager : ILocalizationManager
         Directory.CreateDirectory(localizationDirectory);
     }
 
+    /// <inheritdoc />
     public void Register<T>() where T : LocalizationModelBase, new()
     {
         _registered[typeof(T)] = true;
     }
 
+    /// <inheritdoc />
     public T Get<T>(string? culture = null) where T : LocalizationModelBase, new()
     {
         culture ??= _defaultCulture;
@@ -58,6 +61,7 @@ public sealed class LocalizationManager : ILocalizationManager
             $"Call LoadAllAsync() first.");
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<string> GetLoadedCultures<T>() where T : LocalizationModelBase, new()
     {
         var type = typeof(T);
@@ -66,6 +70,7 @@ public sealed class LocalizationManager : ILocalizationManager
         return [];
     }
 
+    /// <inheritdoc />
     public async Task GenerateTemplatesAsync<T>(IReadOnlyList<string> cultures)
         where T : LocalizationModelBase, new()
     {
@@ -80,6 +85,7 @@ public sealed class LocalizationManager : ILocalizationManager
         }
     }
 
+    /// <inheritdoc />
     public async Task LoadAsync<T>(IReadOnlyList<string> cultures, bool generateIfMissing = true)
         where T : LocalizationModelBase, new()
     {
@@ -124,18 +130,21 @@ public sealed class LocalizationManager : ILocalizationManager
         }
     }
 
+    /// <inheritdoc />
     public async Task GenerateAllTemplatesAsync(IReadOnlyList<string> cultures)
     {
         foreach (var type in _registered.Keys)
             await InvokeGenericAsync(nameof(GenerateTemplatesAsync), type, cultures);
     }
 
+    /// <inheritdoc />
     public async Task LoadAllAsync(IReadOnlyList<string> cultures, bool generateIfMissing = true)
     {
         foreach (var type in _registered.Keys)
             await InvokeGenericAsync(nameof(LoadAsync), type, cultures, generateIfMissing);
     }
 
+    /// <inheritdoc />
     public async Task ReloadAllAsync(IReadOnlyList<string> cultures)
     {
         // Clear in-memory cache and reload all from disk

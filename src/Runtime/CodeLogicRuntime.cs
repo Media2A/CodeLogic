@@ -10,6 +10,9 @@ using CodeLogic.Framework.Libraries;
 
 namespace CodeLogic;
 
+/// <summary>
+/// Core runtime that orchestrates the CodeLogic framework lifecycle — initialization, configuration, library/plugin management, and health monitoring.
+/// </summary>
 public sealed class CodeLogicRuntime : ICodeLogicRuntime
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -31,6 +34,10 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
     private bool _initialized;
     private bool _shutdownRegistered;
 
+    /// <summary>
+    /// Initializes the CodeLogic runtime, loading configuration, discovering libraries, and preparing the framework.
+    /// </summary>
+    /// <param name="configure">Optional callback to configure runtime options before initialization.</param>
     public async Task<InitializationResult> InitializeAsync(Action<CodeLogicOptions>? configure = null)
     {
         await _lock.WaitAsync();
@@ -135,6 +142,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         }
     }
 
+    /// <summary>
+    /// Registers the application instance with the runtime.
+    /// </summary>
     public void RegisterApplication(IApplication application)
     {
         EnsureInitialized();
@@ -150,6 +160,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         }
     }
 
+    /// <summary>
+    /// Configures the application and all libraries, generating missing config files if needed.
+    /// </summary>
     public async Task ConfigureAsync()
     {
         EnsureInitialized();
@@ -198,6 +211,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         }
     }
 
+    /// <summary>
+    /// Starts the runtime — initializes and starts all libraries, then the application.
+    /// </summary>
     public async Task StartAsync()
     {
         EnsureInitialized();
@@ -284,6 +300,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         }
     }
 
+    /// <summary>
+    /// Gracefully stops the application, plugins, and all libraries in reverse order.
+    /// </summary>
     public async Task StopAsync()
     {
         await _lock.WaitAsync();
@@ -319,6 +338,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         }
     }
 
+    /// <summary>
+    /// Resets the runtime to its pre-initialized state, stopping everything and clearing all references.
+    /// </summary>
     public async Task ResetAsync()
     {
         await _lock.WaitAsync();
@@ -349,6 +371,9 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         }
     }
 
+    /// <summary>
+    /// Collects health status from all libraries, plugins, and the application.
+    /// </summary>
     public async Task<HealthReport> GetHealthAsync()
     {
         var libraries = _libraryManager != null ? await _libraryManager.GetHealthAsync() : new Dictionary<string, HealthStatus>();
@@ -374,19 +399,29 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
         };
     }
 
+    /// <summary>Returns the library manager, or null if not initialized.</summary>
     public LibraryManager? GetLibraryManager() => _libraryManager;
+    /// <summary>Returns the registered application, or null if none.</summary>
     public IApplication? GetApplication() => _application;
+    /// <summary>Returns the application context, or null if not configured.</summary>
     public ApplicationContext? GetApplicationContext() => _applicationContext;
+    /// <summary>Returns the framework event bus.</summary>
     public IEventBus GetEventBus() => _eventBus;
 
+    /// <summary>
+    /// Registers the plugin manager with the runtime.
+    /// </summary>
     public void SetPluginManager(PluginManager manager)
     {
         _pluginManager = manager;
         _frameworkLogger.Info("PluginManager registered");
     }
 
+    /// <summary>Returns the plugin manager, or null if not set.</summary>
     public PluginManager? GetPluginManager() => _pluginManager;
+    /// <summary>Returns the runtime options. Throws if not initialized.</summary>
     public CodeLogicOptions GetOptions() => GetOptionsOrThrow();
+    /// <summary>Returns the loaded framework configuration. Throws if not initialized.</summary>
     public CodeLogicConfiguration GetConfiguration() => GetConfigOrThrow();
 
     private void EnsureInitialized()
