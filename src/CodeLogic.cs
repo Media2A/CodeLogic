@@ -126,4 +126,10 @@ public static class CodeLogic
     /// Returns the registered <see cref="PluginManager"/>, or null if none has been registered.
     /// </summary>
     public static PluginManager?          GetPluginManager()         => _runtime.GetPluginManager();
+
+    /// <summary>
+    /// Returns <c>true</c> if <see cref="InitializeAsync"/> has completed successfully.
+    /// Safe to call at any time — never throws.
+    /// </summary>
+    public static bool IsInitialized => _runtime.GetLibraryManager() is not null;
 }
