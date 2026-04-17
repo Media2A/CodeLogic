@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#1a1a2e"/>
+  <circle cx="256" cy="256" r="240" stroke="#7b2ff7" stroke-width="6" fill="none" opacity="0.6"/>
+
+  <!-- Outer bracket < -->
+  <path d="M160 256l72-100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M160 256l72 100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Outer bracket > -->
+  <path d="M352 256l-72-100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M352 256l-72 100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Center gear/cog circle -->
+  <circle cx="256" cy="256" r="42" stroke="#00f5d4" stroke-width="8" fill="none"/>
+
+  <!-- Gear teeth (8 teeth) -->
+  <line x1="256" y1="206" x2="256" y2="192" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+  <line x1="256" y1="306" x2="256" y2="320" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+  <line x1="206" y1="256" x2="192" y2="256" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+  <line x1="306" y1="256" x2="320" y2="256" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+  <line x1="221" y1="221" x2="211" y2="211" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+  <line x1="291" y1="291" x2="301" y2="301" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+  <line x1="291" y1="221" x2="301" y2="211" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+  <line x1="221" y1="291" x2="211" y2="301" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="10" fill="#00f5d4"/>
+</svg>

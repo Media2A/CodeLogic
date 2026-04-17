@@ -29,7 +29,7 @@
     "dest": "../docs-output",
     "globalMetadata": {
       "_appTitle": "CodeLogic 3",
-      "_appLogoPath": "images/logo.png",
+      "_appLogoPath": "images/logo.svg",
       "_appFaviconPath": "images/favicon.ico",
       "_enableSearch": true,
       "_appFooter": "Copyright &copy; 2026 Media2A. Built with <a href='https://dotnet.github.io/docfx'>DocFX</a>.",
