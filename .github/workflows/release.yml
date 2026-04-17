@@ -114,19 +114,6 @@ jobs:
             /p:Version=${{ steps.version.outputs.new_version }} \
             /p:InformationalVersion=${{ steps.version.outputs.new_version }}
 
-      - name: Sign NuGet packages
-        shell: bash
-        run: |
-          echo "${{ secrets.NUGET_SIGNING_CERT }}" | base64 -d > /tmp/nuget-sign.pfx
-          for pkg in artifacts/*.nupkg; do
-            dotnet nuget sign "$pkg" \
-              --certificate-path /tmp/nuget-sign.pfx \
-              --certificate-password "${{ secrets.NUGET_SIGNING_CERT_PASSWORD }}" \
-              --timestamper http://timestamp.digicert.com \
-              --overwrite
-          done
-          rm -f /tmp/nuget-sign.pfx
-
       - name: Push to NuGet.org
         run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
