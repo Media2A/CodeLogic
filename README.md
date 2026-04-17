@@ -1,9 +1,15 @@
-# CodeLogic 3
+<p align="center">
+  <img src="logo.svg" alt="CodeLogic" width="128" height="128">
+</p>
 
-[![NuGet](https://img.shields.io/nuget/v/CodeLogic?label=nuget&color=blue)](https://www.nuget.org/packages/CodeLogic)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<h1 align="center">CodeLogic 3</h1>
 
-A modular .NET 10 framework for building structured, lifecycle-managed applications with clean separation between core infrastructure, framework orchestration, and library integrations.
+<p align="center">
+  <a href="https://www.nuget.org/packages/CodeLogic"><img src="https://img.shields.io/nuget/v/CodeLogic?label=nuget&color=blue" alt="NuGet"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">A modular .NET 10 framework for building structured, lifecycle-managed applications with clean separation between core infrastructure, framework orchestration, and library integrations.</p>
 
 ## Why CodeLogic?
 
