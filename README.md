@@ -1,16 +1,83 @@
 # CodeLogic 3
 
+[![NuGet](https://img.shields.io/nuget/v/CodeLogic?label=nuget&color=blue)](https://www.nuget.org/packages/CodeLogic)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A modular .NET 10 framework for building structured, lifecycle-managed applications with clean separation between core infrastructure, framework orchestration, and library integrations.
+
+## Why CodeLogic?
+
+Most .NET apps start with `Program.cs` and grow organically — services get registered in random order, configuration is scattered, and adding a plugin system means building one from scratch.
+
+CodeLogic gives you a **structured lifecycle** out of the box:
+
+- **Libraries** (reusable integrations) and **Applications** (your business logic) follow the same 4-phase lifecycle: Configure → Initialize → Start → Stop. Dependencies are always resolved in the right order.
+- **Configuration** and **Localization** are built in — not bolted on. Each library and application gets its own config file, auto-generated on first run with defaults and validation.
+- **Plugins** are first-class citizens with hot-reload, isolated assembly contexts, and the same lifecycle as libraries.
+- **Zero external dependencies.** CodeLogic itself has no NuGet dependencies — it's pure .NET 10. External integrations (MySQL, S3, SMTP, etc.) are optional library packages in the [CodeLogic.* family](https://github.com/Media2A/CodeLogic.Libs).
+
+## Install
+
+```bash
+dotnet add package CodeLogic
+```
+
+## Quick Start
+
+```csharp
+var result = await CodeLogic.InitializeAsync(opts =>
+{
+    opts.FrameworkRootPath = "data/codelogic";
+    opts.AppVersion = "1.0.0";
+});
+if (result.ShouldExit) return;
+
+// Load optional libraries (each is a separate NuGet package)
+await Libraries.LoadAsync<MySQL2Library>();
+await Libraries.LoadAsync<MailLibrary>();
+
+// Register your application
+CodeLogic.RegisterApplication(new MyApplication());
+
+// Boot: Configure → Initialize → Start (in dependency order)
+await CodeLogic.ConfigureAsync();
+await CodeLogic.StartAsync();
+
+// ... your app runs ...
+
+await CodeLogic.StopAsync();
+```
+
+On first run, CodeLogic creates a `data/codelogic/` directory with auto-generated config files for each library and your application. Edit them to configure — no code changes needed.
+
+## Lifecycle
+
+Every library and application follows the same 4-phase lifecycle:
+
+```
+InitializeAsync()       Load CodeLogic.json, validate, create LibraryManager
+RegisterApplication()   Declare the consuming app
+ConfigureAsync()        Run OnConfigureAsync on app + libraries
+                        (generates/loads config and localization files)
+StartAsync()            Libraries: OnInitializeAsync → OnStartAsync
+                        Application: OnInitializeAsync → OnStartAsync
+
+--- application runs ---
+
+StopAsync()             Application OnStopAsync, unload plugins, then stop libraries
+```
+
+Libraries start before the application and stop after it — so your app can always rely on its libraries being available.
 
 ## Architecture
 
 ```
 CodeLogic/
 ├── src/
-│   ├── Core/               # Pure infrastructure engines — no framework coupling
-│   │   ├── Logging/        # ILogger, Logger, LogLevel, LoggingOptions
-│   │   ├── Configuration/  # IConfigurationManager, ConfigModelBase
-│   │   ├── Localization/   # ILocalizationManager, LocalizationModelBase
+│   ├── Core/               # Pure infrastructure — no framework coupling
+│   │   ├── Logging/        # ILogger with scoped file-based output
+│   │   ├── Configuration/  # Auto-generated JSON config with validation
+│   │   ├── Localization/   # Culture-aware string management
 │   │   └── Utilities/      # SemanticVersion, StartupValidator, FirstRunManager
 │   │
 │   ├── Framework/          # Lifecycle orchestration — uses Core
@@ -20,94 +87,48 @@ CodeLogic/
 │   │
 │   └── CodeLogic.cs        # Static facade + ICodeLogicRuntime (injectable)
 │
-├── Libs/                   # Official CL.* integrations
-│   ├── CL.Core/            # Shared utilities (hashing, caching, imaging, etc.)
-│   ├── CL.SQLite/          # SQLite with LINQ query builder + table sync
-│   ├── CL.MySQL2/          # MySQL with full ORM-like features
-│   ├── CL.PostgreSQL/      # PostgreSQL integration
-│   ├── CL.Mail/            # SMTP/IMAP + template engine
-│   ├── CL.SystemStats/     # Cross-platform CPU/memory/process stats
-│   ├── CL.GitHelper/       # Git repository management
-│   ├── CL.NetUtils/        # DNS, IP geolocation, DNSBL
-│   ├── CL.SocialConnect/   # Discord webhooks, Steam API
-│   ├── CL.StorageS3/       # Amazon S3 storage
-│   └── CL.TwoFactorAuth/   # TOTP 2FA + QR code generation
-│
-├── docs/                   # Documentation per layer
-├── samples/                # Example applications
-└── CodeLogic.sln
+├── docs/                   # Documentation (getting started, articles, API reference)
+└── samples/                # Example applications
 ```
 
-## Key Design Principles
+### Key Design Principles
 
-**Core is standalone.** `Logging`, `Configuration`, and `Localization` have zero dependencies on the framework lifecycle. You can use them in any .NET app without CodeLogic at all.
+**Core is standalone.** Logging, Configuration, and Localization have zero dependencies on the framework lifecycle. You can use them in any .NET app without the rest of CodeLogic.
 
-**Framework wires Core into lifecycle.** `LibraryContext` and `ApplicationContext` bundle Core engines and hand them to libraries/apps at the right lifecycle phase — nothing gets constructed until it's needed.
+**Framework wires Core into lifecycle.** `LibraryContext` and `ApplicationContext` bundle Core engines and hand them to libraries/apps at the right phase — nothing gets constructed until it's needed.
 
-**Static facade, injectable runtime.** The `CodeLogic` static class is a convenience facade. For testing or advanced scenarios, use `ICodeLogicRuntime` directly via DI.
+**Static facade, injectable runtime.** The `CodeLogic` static class is a convenience facade. For testing or advanced scenarios, inject `ICodeLogicRuntime` via DI.
 
-**Plugins are first-class.** The plugin system is on par with libraries — same 4-phase lifecycle, same access to Core engines (config, logging, localization).
-
-## Lifecycle
-
-```
-InitializeAsync()       - load CodeLogic.json, validate, create LibraryManager
-RegisterApplication()   - declare the consuming app
-ConfigureAsync()        - discover/load libraries, run OnConfigureAsync on app + libraries
-                          (generates/loads config and localization files)
-StartAsync()            - libraries: OnInitializeAsync -> OnStartAsync
-                          application: OnInitializeAsync -> OnStartAsync
-
---- application runs ---
-
-StopAsync()             - application OnStopAsync, unload plugins, then stop libraries
-```
-
-## Quick Start
-
-```csharp
-// Program.cs
-var result = await CodeLogic.InitializeAsync(opts =>
-{
-    opts.FrameworkRootPath = "CodeLogic";
-    opts.AppVersion = "1.0.0";
-});
-if (result.ShouldExit) return;
-
-await Libraries.LoadAsync<SQLiteLibrary>();
-CodeLogic.RegisterApplication(new MyApplication());
-
-await CodeLogic.ConfigureAsync();
-await CodeLogic.StartAsync();
-
-// ... run your app ...
-
-await CodeLogic.StopAsync();
-```
+**Plugins are first-class.** Same lifecycle, same access to config/logging/localization, hot-loadable at runtime via `AssemblyLoadContext` isolation.
 
 ## Building a Library
 
+Libraries are reusable integrations that plug into the CodeLogic lifecycle:
+
 ```csharp
-[LibraryManifest(Id = "cl.mylib", Name = "CL.MyLib", Version = "1.0.0")]
 public class MyLibrary : ILibrary
 {
-    public LibraryManifest Manifest { get; } = new() { Id = "cl.mylib", ... };
+    public LibraryManifest Manifest { get; } = new()
+    {
+        Id = "my.library", Name = "My Library", Version = "1.0.0"
+    };
 
-    public async Task OnConfigureAsync(LibraryContext context)
+    public Task OnConfigureAsync(LibraryContext context)
     {
         context.Configuration.Register<MyLibConfig>();
-        context.Localization.Register<MyLibStrings>();
+        return Task.CompletedTask;
     }
 
-    public async Task OnInitializeAsync(LibraryContext context)
+    public Task OnInitializeAsync(LibraryContext context)
     {
         var config = context.Configuration.Get<MyLibConfig>();
-        // initialize services using config
+        // Initialize services using validated config
+        return Task.CompletedTask;
     }
 
-    public async Task OnStartAsync(LibraryContext context) { }
-    public async Task OnStopAsync() { }
-    public async Task<HealthStatus> HealthCheckAsync() => HealthStatus.Healthy("OK");
+    public Task OnStartAsync(LibraryContext context) => Task.CompletedTask;
+    public Task OnStopAsync() => Task.CompletedTask;
+    public Task<HealthStatus> HealthCheckAsync() => Task.FromResult(HealthStatus.Healthy("OK"));
     public void Dispose() { }
 }
 ```
@@ -122,25 +143,26 @@ public class MyApplication : IApplication
         Id = "myapp", Name = "My App", Version = "1.0.0"
     };
 
-    public async Task OnConfigureAsync(ApplicationContext context)
+    public Task OnConfigureAsync(ApplicationContext context)
     {
         context.Configuration.Register<AppSettings>();
-        context.Localization.Register<AppStrings>();
+        return Task.CompletedTask;
     }
 
-    public async Task OnInitializeAsync(ApplicationContext context)
+    public Task OnInitializeAsync(ApplicationContext context)
     {
         var settings = context.Configuration.Get<AppSettings>();
+        return Task.CompletedTask;
     }
 
-    public async Task OnStartAsync(ApplicationContext context) { }
-    public async Task OnStopAsync() { }
+    public Task OnStartAsync(ApplicationContext context) => Task.CompletedTask;
+    public Task OnStopAsync() => Task.CompletedTask;
 }
 ```
 
 ## Building a Plugin
 
-Plugins are hot-loadable at runtime — no restart required.
+Plugins are hot-loadable at runtime — no restart required:
 
 ```csharp
 public class MyPlugin : IPlugin
@@ -158,11 +180,49 @@ public class MyPlugin : IPlugin
         IsLoaded = true;
     }
 
-    public async Task OnUnloadAsync() { IsLoaded = false; }
-    public async Task<HealthStatus> HealthCheckAsync() => HealthStatus.Healthy("OK");
+    public Task OnUnloadAsync() { IsLoaded = false; return Task.CompletedTask; }
+    public Task<HealthStatus> HealthCheckAsync() => Task.FromResult(HealthStatus.Healthy("OK"));
     public void Dispose() { }
 }
 ```
+
+## Official Library Packages
+
+The [CodeLogic.* library family](https://github.com/Media2A/CodeLogic.Libs) provides production-ready integrations:
+
+| Package | Description |
+|---------|-------------|
+| [CodeLogic.Common](https://www.nuget.org/packages/CodeLogic.Common) | Shared utilities — hashing, caching, imaging, compression |
+| [CodeLogic.MySQL2](https://www.nuget.org/packages/CodeLogic.MySQL2) | MySQL with LINQ query builder, table sync, migrations |
+| [CodeLogic.SQLite](https://www.nuget.org/packages/CodeLogic.SQLite) | SQLite with connection pooling and LINQ queries |
+| [CodeLogic.PostgreSQL](https://www.nuget.org/packages/CodeLogic.PostgreSQL) | PostgreSQL integration |
+| [CodeLogic.Mail](https://www.nuget.org/packages/CodeLogic.Mail) | SMTP/IMAP email with template engine |
+| [CodeLogic.StorageS3](https://www.nuget.org/packages/CodeLogic.StorageS3) | Amazon S3 / Cloudflare R2 / MinIO storage |
+| [CodeLogic.SocialConnect](https://www.nuget.org/packages/CodeLogic.SocialConnect) | Discord webhooks + Steam Web API |
+| [CodeLogic.NetUtils](https://www.nuget.org/packages/CodeLogic.NetUtils) | DNS, DNSBL, IP geolocation |
+| [CodeLogic.GameNetQuery](https://www.nuget.org/packages/CodeLogic.GameNetQuery) | Game server queries (Valve RCON, Source UDP, Minecraft) |
+| [CodeLogic.SystemStats](https://www.nuget.org/packages/CodeLogic.SystemStats) | Cross-platform CPU/memory/process monitoring |
+| [CodeLogic.GitHelper](https://www.nuget.org/packages/CodeLogic.GitHelper) | Git repository management |
+| [CodeLogic.TwoFactorAuth](https://www.nuget.org/packages/CodeLogic.TwoFactorAuth) | TOTP 2FA + QR code generation |
+
+Each library follows the same lifecycle pattern — load it with `Libraries.LoadAsync<T>()`, configure it via its auto-generated JSON config file, and use it.
+
+## Requirements
+
+- .NET 10 SDK or later
+- No external NuGet dependencies (the core framework is self-contained)
+
+## Documentation
+
+- [Getting Started](docs/getting-started.md)
+- [Application Lifecycle](docs/articles/application-lifecycle.md)
+- [Library Lifecycle](docs/articles/library-lifecycle.md)
+- [Plugins](docs/articles/plugins.md)
+- [Configuration](docs/articles/configuration.md)
+- [Localization](docs/articles/localization.md)
+- [Event Bus](docs/articles/event-bus.md)
+- [Health Checks](docs/articles/health-checks.md)
+- [CLI Arguments](docs/Reference/cli-args.md)
 
 ## License
 
