@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: release
-          token: ${{ secrets.CODELOGIC_REPO_TOKEN }}
+          token: ${{ secrets.CODELOGIC_REPO_TOKEN || github.token }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
