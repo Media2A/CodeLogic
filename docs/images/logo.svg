@@ -1,29 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <!-- Background circle -->
-  <circle cx="256" cy="256" r="240" fill="#1a1a2e"/>
-  <circle cx="256" cy="256" r="240" stroke="#7b2ff7" stroke-width="6" fill="none" opacity="0.6"/>
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="480" height="480" rx="64" fill="#1e1e2e"/>
+  <rect x="16" y="16" width="480" height="480" rx="64" stroke="#3a3a52" stroke-width="2" fill="none"/>
 
-  <!-- Outer bracket < -->
-  <path d="M160 256l72-100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M160 256l72 100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- C letter -->
+  <path d="M196 176c-55 0-88 40-88 80s33 80 88 80c28 0 50-12 64-30"
+        stroke="#5cb8e6" stroke-width="32" stroke-linecap="round" fill="none"/>
 
-  <!-- Outer bracket > -->
-  <path d="M352 256l-72-100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M352 256l-72 100" stroke="#7b2ff7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- L letter -->
+  <path d="M272 168v168h80"
+        stroke="#5cb8e6" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
-  <!-- Center gear/cog circle -->
-  <circle cx="256" cy="256" r="42" stroke="#00f5d4" stroke-width="8" fill="none"/>
+  <!-- Accent dot -->
+  <circle cx="400" cy="336" r="14" fill="#3d8fb5"/>
 
-  <!-- Gear teeth (8 teeth) -->
-  <line x1="256" y1="206" x2="256" y2="192" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-  <line x1="256" y1="306" x2="256" y2="320" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-  <line x1="206" y1="256" x2="192" y2="256" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-  <line x1="306" y1="256" x2="320" y2="256" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-  <line x1="221" y1="221" x2="211" y2="211" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-  <line x1="291" y1="291" x2="301" y2="301" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-  <line x1="291" y1="221" x2="301" y2="211" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-  <line x1="221" y1="291" x2="211" y2="301" stroke="#00f5d4" stroke-width="8" stroke-linecap="round"/>
-
-  <!-- Center dot -->
-  <circle cx="256" cy="256" r="10" fill="#00f5d4"/>
+  <!-- Subtle code brackets -->
+  <path d="M68 230l-20 26l20 26" stroke="#3a3a52" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M444 230l20 26l-20 26" stroke="#3a3a52" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>
