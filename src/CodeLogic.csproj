@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>13</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Version>3.0.0</Version>
+    <Version>3.1.0</Version>
     <Authors>Media2A</Authors>
     <Copyright>Copyright © 2026 Media2A</Copyright>
     <Description>Modular .NET 10 framework with lifecycle-managed libraries, applications, and plugins. Zero external NuGet dependencies.</Description>
@@ -21,12 +21,10 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <Optimize>true</Optimize>
   </PropertyGroup>
-
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
     <None Include="../LICENSE" Pack="true" PackagePath="/" />
   </ItemGroup>
-
   <!-- Treat warnings as errors for cleaner code -->
   <PropertyGroup>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
