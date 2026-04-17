@@ -26,63 +26,107 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.CODELOGIC_REPO_TOKEN || github.token }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Compute version metadata
+      - name: Bump version from commit message
         id: version
         shell: pwsh
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          [xml]$proj = Get-Content 'src/CodeLogic.csproj'
-          $baseVersion = ($proj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
-          if ([string]::IsNullOrWhiteSpace($baseVersion)) {
-            throw "Could not read <Version> from src/CodeLogic.csproj"
+          $csproj = 'src/CodeLogic.csproj'
+          [xml]$proj = Get-Content $csproj
+          $versionNode = $proj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1
+          $currentVersion = $versionNode.Version
+          if ([string]::IsNullOrWhiteSpace($currentVersion)) {
+            throw "Could not read <Version> from $csproj"
           }
 
-          $timestamp = Get-Date -Format 'yyyyMMddHHmmss'
-          $buildVersion = "$baseVersion-build.$timestamp.${env:GITHUB_RUN_NUMBER}"
-          $tag = "v$buildVersion"
+          # Determine bump level from commit message
+          $msg = $env:COMMIT_MSG
+          if ($msg -match '(?i)^breaking[:\s]|BREAKING CHANGE') {
+            $bump = 'major'
+          } elseif ($msg -match '(?i)^feat[:\s]') {
+            $bump = 'minor'
+          } else {
+            $bump = 'patch'
+          }
 
-          "base_version=$baseVersion" >> $env:GITHUB_OUTPUT
-          "timestamp=$timestamp" >> $env:GITHUB_OUTPUT
-          "build_version=$buildVersion" >> $env:GITHUB_OUTPUT
-          "tag=$tag" >> $env:GITHUB_OUTPUT
+          $parts = $currentVersion.Split('.')
+          $major = [int]$parts[0]; $minor = [int]$parts[1]; $patch = [int]$parts[2]
+
+          switch ($bump) {
+            'major' { $major++; $minor = 0; $patch = 0 }
+            'minor' { $minor++; $patch = 0 }
+            'patch' { $patch++ }
+          }
+
+          $newVersion = "$major.$minor.$patch"
+          $versionNode.Version = $newVersion
+          $proj.Save((Resolve-Path $csproj).Path)
+
+          Write-Host "CodeLogic: $currentVersion -> $newVersion ($bump)"
+
+          "current_version=$currentVersion" >> $env:GITHUB_OUTPUT
+          "new_version=$newVersion" >> $env:GITHUB_OUTPUT
+          "bump=$bump" >> $env:GITHUB_OUTPUT
+
+      - name: Commit version bump
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/CodeLogic.csproj
+          if git diff --cached --quiet; then
+            echo "No version changes to commit"
+          else
+            git commit -m "chore: auto-bump CodeLogic ${{ steps.version.outputs.current_version }} → ${{ steps.version.outputs.new_version }} [skip ci]"
+            git push
+          fi
 
       - name: Restore
         run: dotnet restore src/CodeLogic.csproj
 
       - name: Build
-        run: dotnet build src/CodeLogic.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.build_version }} /p:InformationalVersion=${{ steps.version.outputs.build_version }}
+        run: |
+          dotnet build src/CodeLogic.csproj --configuration Release --no-restore \
+            /p:Version=${{ steps.version.outputs.new_version }} \
+            /p:InformationalVersion=${{ steps.version.outputs.new_version }}
 
       - name: Pack
-        run: dotnet pack src/CodeLogic.csproj --configuration Release --no-build --output artifacts /p:PackageVersion=${{ steps.version.outputs.build_version }} /p:Version=${{ steps.version.outputs.build_version }} /p:InformationalVersion=${{ steps.version.outputs.build_version }}
+        run: |
+          dotnet pack src/CodeLogic.csproj --configuration Release --no-build --output artifacts \
+            /p:PackageVersion=${{ steps.version.outputs.new_version }} \
+            /p:Version=${{ steps.version.outputs.new_version }} \
+            /p:InformationalVersion=${{ steps.version.outputs.new_version }}
 
       - name: Prepare release assets
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
 
-          $runtimeZip = "artifacts/CodeLogic-${{ steps.version.outputs.build_version }}.zip"
+          $runtimeZip = "artifacts/CodeLogic-${{ steps.version.outputs.new_version }}.zip"
           Compress-Archive -Path 'src/bin/Release/net10.0/*' -DestinationPath $runtimeZip -Force
 
           @"
-          CodeLogic release
+          ## CodeLogic ${{ steps.version.outputs.new_version }}
 
-          Base version: ${{ steps.version.outputs.base_version }}
-          Build version: ${{ steps.version.outputs.build_version }}
-          Commit: ${{ github.sha }}
+          **Bump**: ${{ steps.version.outputs.bump }} (${{ steps.version.outputs.current_version }} → ${{ steps.version.outputs.new_version }})
+          **Commit**: ${{ github.sha }}
           "@ | Set-Content 'artifacts/release-notes.md'
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: CodeLogic ${{ steps.version.outputs.build_version }}
+          tag_name: v${{ steps.version.outputs.new_version }}
+          name: CodeLogic ${{ steps.version.outputs.new_version }}
           body_path: artifacts/release-notes.md
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
           files: |
             artifacts/*.nupkg
