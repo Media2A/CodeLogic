@@ -8,6 +8,8 @@ namespace CodeLogic.Core.Configuration;
 /// </summary>
 public interface IConfigurationManager
 {
+    // ─── Existing API (unchanged) ─────────────────────────────────────────────
+
     /// <summary>Registers a config type for this component.</summary>
     void Register<T>(string? subConfigName = null) where T : ConfigModelBase, new();
 
@@ -22,6 +24,7 @@ public interface IConfigurationManager
 
     /// <summary>
     /// Saves config to disk. Validates before writing — throws if invalid.
+    /// Fires <see cref="ConfigChanged"/> with <see cref="ConfigChangeKind.Updated"/> on success.
     /// </summary>
     Task SaveAsync<T>(T config) where T : ConfigModelBase, new();
 
@@ -36,6 +39,7 @@ public interface IConfigurationManager
 
     /// <summary>
     /// Reloads a specific config from disk and updates the in-memory instance.
+    /// Fires <see cref="ConfigChanged"/> with <see cref="ConfigChangeKind.Reloaded"/> on success.
     /// Safe for: log levels, intervals, pool sizes.
     /// NOT safe for: connection strings, paths, core settings (requires restart).
     /// </summary>
@@ -46,4 +50,47 @@ public interface IConfigurationManager
 
     /// <summary>Returns the on-disk paths for all registered config files.</summary>
     IReadOnlyList<string> GetRegisteredFilePaths();
+
+    // ─── Discovery / schema / generic save (added in 3.3.0) ───────────────────
+
+    /// <summary>Enumerate every registered config section. Useful for admin UIs.</summary>
+    IReadOnlyList<ConfigSectionInfo> GetSections();
+
+    /// <summary>
+    /// Build a <see cref="ConfigSchema"/> for a registered section, merged with the
+    /// currently-loaded values. Set <paramref name="includeSecrets"/> to true only
+    /// when you need the raw values (e.g. exporting config); the default masks
+    /// secret fields.
+    /// </summary>
+    /// <param name="sectionName">Empty string = main <c>config.json</c>.</param>
+    /// <param name="includeSecrets">When true, return real values for fields marked <see cref="ConfigFieldAttribute.Secret"/>; default false returns the mask string.</param>
+    /// <exception cref="InvalidOperationException">Section is not registered.</exception>
+    ConfigSchema GetSchema(string sectionName, bool includeSecrets = false);
+
+    /// <summary>
+    /// Update a section from a raw JSON payload. The payload is deserialized into
+    /// the registered type, validated, and (if valid) persisted and reloaded in
+    /// memory. Secret fields that echo <see cref="ConfigField.SecretMask"/> are
+    /// preserved from the previously-loaded values rather than overwritten.
+    /// Fires <see cref="ConfigChanged"/> with <see cref="ConfigChangeKind.Updated"/> on success.
+    /// </summary>
+    /// <returns>The validation result. When <see cref="ConfigValidationResult.IsValid"/> is false, the file is untouched.</returns>
+    Task<ConfigValidationResult> UpdateSectionAsync(
+        string sectionName,
+        string json,
+        string? changedBy = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Reset a section to its default values (replaces the file and the in-memory
+    /// instance). Fires <see cref="ConfigChanged"/> with <see cref="ConfigChangeKind.Reset"/>.
+    /// </summary>
+    Task ResetSectionAsync(string sectionName, string? changedBy = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Fired after a successful save / reload / reset. Subscribers typically use
+    /// this to refresh cached state derived from the section (connection pools,
+    /// thresholds, etc.). Fires on the calling thread; keep handlers fast.
+    /// </summary>
+    event EventHandler<ConfigChangedEventArgs>? ConfigChanged;
 }
