@@ -1,3 +1,4 @@
+using CodeLogic.Core.Configuration;
 using CodeLogic.Framework.Libraries;
 
 namespace CodeLogic;
@@ -71,5 +72,58 @@ public static class Libraries
         // querying all is a safe read, not an indication of programmer error.
         var mgr = CodeLogic.GetLibraryManager();
         return mgr?.GetAllLibraries() ?? [];
+    }
+
+    // ── Config discovery shortcuts (3.4.1+) ──────────────────────────────────
+
+    /// <summary>
+    /// Every registered configuration section across every loaded library.
+    /// Empty list before <see cref="CodeLogic.ConfigureAsync"/> runs.
+    /// </summary>
+    public static IReadOnlyList<ConfigSectionOverview> AllConfigSections()
+    {
+        var mgr = CodeLogic.GetLibraryManager();
+        return mgr?.GetAllConfigSections() ?? [];
+    }
+
+    /// <summary>
+    /// Schema + current values for a specific library's section. Returns null
+    /// if the library or section isn't registered.
+    /// </summary>
+    /// <param name="libraryId">The <see cref="LibraryManifest.Id"/> (e.g., <c>"CL.MySQL2"</c>).</param>
+    /// <param name="sectionName">The section sub-name (empty string for the root <c>config.json</c>).</param>
+    /// <param name="includeSecrets">When true, returns raw values; default masks fields marked <see cref="ConfigFieldAttribute.Secret"/>.</param>
+    public static ConfigSchema? GetConfigSchema(string libraryId, string sectionName, bool includeSecrets = false)
+    {
+        var mgr = CodeLogic.GetLibraryManager();
+        return mgr?.GetConfigSchema(libraryId, sectionName, includeSecrets);
+    }
+
+    /// <summary>
+    /// Update a library's config section from a raw JSON payload. Returns the
+    /// validation result. File is untouched when validation fails.
+    /// </summary>
+    public static Task<ConfigValidationResult> UpdateConfigAsync(
+        string libraryId,
+        string sectionName,
+        string json,
+        string? changedBy = null,
+        CancellationToken ct = default)
+    {
+        var mgr = CodeLogic.GetLibraryManager()
+            ?? throw new InvalidOperationException("Libraries not configured yet. Call ConfigureAsync() first.");
+        return mgr.UpdateConfigAsync(libraryId, sectionName, json, changedBy, ct);
+    }
+
+    /// <summary>Reset a library's config section to defaults.</summary>
+    public static Task ResetConfigAsync(
+        string libraryId,
+        string sectionName,
+        string? changedBy = null,
+        CancellationToken ct = default)
+    {
+        var mgr = CodeLogic.GetLibraryManager()
+            ?? throw new InvalidOperationException("Libraries not configured yet. Call ConfigureAsync() first.");
+        return mgr.ResetConfigAsync(libraryId, sectionName, changedBy, ct);
     }
 }

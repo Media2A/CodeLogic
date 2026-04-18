@@ -375,6 +375,94 @@ public sealed class LibraryManager : IDisposable
     /// </summary>
     public IEnumerable<LoadedLibrary> GetLoadedLibraries() => _libraries.AsReadOnly();
 
+    // ── Config discovery (3.4.1+) ────────────────────────────────────────────
+
+    /// <summary>
+    /// Enumerate every registered configuration section across every loaded
+    /// library. Used by admin UIs and CLI tools to list editable settings.
+    /// </summary>
+    public IReadOnlyList<ConfigSectionOverview> GetAllConfigSections()
+    {
+        var result = new List<ConfigSectionOverview>();
+        foreach (var lib in _libraries)
+        {
+            if (lib.Context is null) continue; // Pre-configure phase
+            IReadOnlyList<ConfigSectionInfo> sections;
+            try { sections = lib.Context.Configuration.GetSections(); }
+            catch { continue; }
+
+            foreach (var s in sections)
+            {
+                result.Add(new ConfigSectionOverview
+                {
+                    LibraryId   = lib.Manifest.Id,
+                    LibraryName = lib.Manifest.Name,
+                    SectionName = s.SectionName,
+                    Title       = s.Title,
+                    Description = s.Description,
+                    FilePath    = s.FilePath,
+                    FileExists  = s.FileExists,
+                    IsLoaded    = s.IsLoaded
+                });
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Build the <see cref="ConfigSchema"/> for a specific library's section.
+    /// Returns null if the library or section isn't registered.
+    /// </summary>
+    /// <param name="libraryId">The <see cref="LibraryManifest.Id"/>.</param>
+    /// <param name="sectionName">The section sub-name (empty string for the root <c>config.json</c>).</param>
+    /// <param name="includeSecrets">When true, return raw values; default masks fields marked <see cref="ConfigFieldAttribute.Secret"/>.</param>
+    public ConfigSchema? GetConfigSchema(string libraryId, string sectionName, bool includeSecrets = false)
+    {
+        var lib = _libraries.FirstOrDefault(l =>
+            string.Equals(l.Manifest.Id, libraryId, StringComparison.OrdinalIgnoreCase));
+        if (lib?.Context is null) return null;
+        try { return lib.Context.Configuration.GetSchema(sectionName, includeSecrets); }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>
+    /// Update a library's config section from a raw JSON payload.
+    /// Returns the validation result. File is untouched when validation fails.
+    /// </summary>
+    public async Task<ConfigValidationResult> UpdateConfigAsync(
+        string libraryId,
+        string sectionName,
+        string json,
+        string? changedBy = null,
+        CancellationToken ct = default)
+    {
+        var lib = _libraries.FirstOrDefault(l =>
+            string.Equals(l.Manifest.Id, libraryId, StringComparison.OrdinalIgnoreCase));
+        if (lib?.Context is null)
+            return ConfigValidationResult.Invalid($"Library '{libraryId}' is not loaded.");
+
+        return await lib.Context.Configuration
+            .UpdateSectionAsync(sectionName, json, changedBy, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Reset a library's config section to defaults.</summary>
+    public async Task ResetConfigAsync(
+        string libraryId,
+        string sectionName,
+        string? changedBy = null,
+        CancellationToken ct = default)
+    {
+        var lib = _libraries.FirstOrDefault(l =>
+            string.Equals(l.Manifest.Id, libraryId, StringComparison.OrdinalIgnoreCase));
+        if (lib?.Context is null)
+            throw new InvalidOperationException($"Library '{libraryId}' is not loaded.");
+
+        await lib.Context.Configuration
+            .ResetSectionAsync(sectionName, changedBy, ct)
+            .ConfigureAwait(false);
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private LibraryContext CreateContext(string libraryId)
