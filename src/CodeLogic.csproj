@@ -7,7 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>13</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Version>3.2.3</Version>
+    <Version>3.2.4</Version>
+    <!-- Pin assembly binding identity to minor — patches load interchangeably. -->
+    <AssemblyVersion>3.2.0.0</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
     <Authors>Media2A</Authors>
     <Copyright>Copyright © 2026 Media2A</Copyright>
     <Description>Modular .NET 10 framework with lifecycle-managed libraries, applications, and plugins. Zero external NuGet dependencies.</Description>
