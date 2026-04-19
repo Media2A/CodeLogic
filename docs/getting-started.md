@@ -1,4 +1,4 @@
-# Getting Started with CodeLogic 3
+# Getting Started with CodeLogic 4
 
 CodeLogic is a modular .NET 10 framework for building structured applications with libraries, plugins, configuration, localization, events, and health checks. This guide takes you from zero to a running application.
 
@@ -118,7 +118,7 @@ Example development file:
 {
   "framework": {
     "name": "CodeLogic",
-    "version": "3.0.0"
+    "version": "4.0.0"
   },
   "logging": {
     "mode": "singleFile",

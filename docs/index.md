@@ -2,9 +2,9 @@
 _layout: landing
 ---
 
-# CodeLogic 3
+# CodeLogic 4
 
-CodeLogic 3 is a .NET 10 framework for lifecycle-managed applications with libraries, plugins, configuration, localization, events, and health checks.
+CodeLogic 4 is a .NET 10 framework for lifecycle-managed applications with libraries, plugins, configuration, localization, events, and health checks.
 
 ---
 

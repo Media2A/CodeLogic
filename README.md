@@ -2,7 +2,7 @@
   <img src="logo.svg" alt="CodeLogic" width="128" height="128">
 </p>
 
-<h1 align="center">CodeLogic 3</h1>
+<h1 align="center">CodeLogic 4</h1>
 
 <p align="center">
   <a href="https://www.nuget.org/packages/CodeLogic"><img src="https://img.shields.io/nuget/v/CodeLogic?label=nuget&color=blue" alt="NuGet"></a>

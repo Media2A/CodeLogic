@@ -21,7 +21,7 @@ CodeLogic parses command-line arguments during `InitializeAsync()`. CLI flags ov
 
 ```text
 $ myapp --version
-CodeLogic 3.0.0 | App 1.0.0
+CodeLogic 4.0.0 | App 1.0.0
 ```
 
 This sets `InitializationResult.ShouldExit = true`.
@@ -32,7 +32,7 @@ This sets `InitializationResult.ShouldExit = true`.
 
 ```text
 $ myapp --info
-CodeLogic 3.0.0
+CodeLogic 4.0.0
   App version  : 1.0.0
   Machine      : MY-MACHINE
   Framework    : C:\MyApp\CodeLogic
