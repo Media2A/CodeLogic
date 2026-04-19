@@ -10,7 +10,7 @@ namespace CodeLogic.Framework.Libraries;
 /// </summary>
 /// <remarks>
 /// Produced by <see cref="LibraryManager.GetAllConfigSections"/> (and the
-/// <see cref="CodeLogic.Libraries.AllConfigSections"/> static shorthand).
+/// <c>CodeLogic.Libraries.AllConfigSections()</c> static shorthand).
 /// </remarks>
 public sealed class ConfigSectionOverview
 {
