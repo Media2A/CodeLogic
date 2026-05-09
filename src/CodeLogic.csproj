@@ -21,12 +21,12 @@
     <RepositoryUrl>https://github.com/Media2A/CodeLogic</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>framework;modular;lifecycle;libraries;plugins;dotnet</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <Optimize>true</Optimize>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../README.nuget.md" Pack="true" PackagePath="/" />
     <None Include="../LICENSE" Pack="true" PackagePath="/" />
   </ItemGroup>
   <!-- Treat warnings as errors for cleaner code -->
