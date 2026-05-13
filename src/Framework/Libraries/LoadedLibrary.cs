@@ -22,4 +22,12 @@ public sealed class LoadedLibrary
 
     /// <summary>Exception if State == Failed.</summary>
     public Exception? FailureException { get; set; }
+
+    /// <summary>
+    /// When <see langword="true"/>, Configure / Initialize / Start
+    /// failures are tolerated — the library is marked
+    /// <see cref="LibraryState.Failed"/> and the boot continues without
+    /// it. Set by <see cref="LibraryLoadOptions.OptionalAtBoot"/>.
+    /// </summary>
+    public bool IsOptional { get; init; }
 }

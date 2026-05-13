@@ -65,7 +65,18 @@ public sealed class LibraryManager : IDisposable
     /// Dependency validation is deferred to ConfigureAllAsync which runs
     /// ValidateDependencies after all libraries are registered.
     /// </summary>
-    public async Task<bool> LoadLibraryAsync<T>() where T : class, ILibrary, new()
+    public Task<bool> LoadLibraryAsync<T>() where T : class, ILibrary, new() =>
+        LoadLibraryAsync<T>(options: null);
+
+    /// <summary>
+    /// Manually registers a library by type with load-time options.
+    /// Pass <see cref="LibraryLoadOptions.OptionalAtBoot"/> = <see langword="true"/>
+    /// to mark the library "nice to have" — a Configure / Initialize / Start
+    /// failure will be logged + the library marked <see cref="LibraryState.Failed"/>,
+    /// but the application boots without it (other libraries continue
+    /// configuring/initializing as normal).
+    /// </summary>
+    public async Task<bool> LoadLibraryAsync<T>(LibraryLoadOptions? options) where T : class, ILibrary, new()
     {
         await _lock.WaitAsync();
         try
@@ -83,11 +94,13 @@ public sealed class LibraryManager : IDisposable
             {
                 Instance     = library,
                 Manifest     = manifest,
-                AssemblyPath = typeof(T).Assembly.Location
+                AssemblyPath = typeof(T).Assembly.Location,
+                IsOptional   = options?.OptionalAtBoot ?? false
             });
             _librariesById[manifest.Id] = library;
 
-            Console.WriteLine($"  ✓ Manually loaded: {manifest.Name} v{manifest.Version}");
+            var optionalTag = options?.OptionalAtBoot == true ? " (optional)" : "";
+            Console.WriteLine($"  ✓ Manually loaded: {manifest.Name} v{manifest.Version}{optionalTag}");
             return true;
         }
         finally { _lock.Release(); }
@@ -198,10 +211,14 @@ public sealed class LibraryManager : IDisposable
                 {
                     loaded.State            = LibraryState.Failed;
                     loaded.FailureException = ex;
+                    _eventBus.Publish(new LibraryFailedEvent(loaded.Manifest.Id, loaded.Manifest.Name, ex));
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"  ✗ Failed to configure {loaded.Manifest.Name}: {ex.Message}");
+                    if (loaded.IsOptional)
+                        Console.WriteLine($"     (optional — boot continues without this library)");
                     Console.ResetColor();
-                    throw;
+                    if (!loaded.IsOptional)
+                        throw;
                 }
             }
         }
@@ -236,8 +253,11 @@ public sealed class LibraryManager : IDisposable
                     _eventBus.Publish(new LibraryFailedEvent(loaded.Manifest.Id, loaded.Manifest.Name, ex));
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"  ✗ Failed to initialize {loaded.Manifest.Name}: {ex.Message}");
+                    if (loaded.IsOptional)
+                        Console.WriteLine($"     (optional — boot continues without this library)");
                     Console.ResetColor();
-                    throw;
+                    if (!loaded.IsOptional)
+                        throw;
                 }
             }
         }
@@ -273,8 +293,11 @@ public sealed class LibraryManager : IDisposable
                     _eventBus.Publish(new LibraryFailedEvent(loaded.Manifest.Id, loaded.Manifest.Name, ex));
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"  ✗ Failed to start {loaded.Manifest.Name}: {ex.Message}");
+                    if (loaded.IsOptional)
+                        Console.WriteLine($"     (optional — boot continues without this library)");
                     Console.ResetColor();
-                    throw;
+                    if (!loaded.IsOptional)
+                        throw;
                 }
             }
         }

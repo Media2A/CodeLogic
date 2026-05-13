@@ -47,6 +47,30 @@ public static class Libraries
     }
 
     /// <summary>
+    /// Dynamically loads a library with per-library options. The most
+    /// common use is to pass <see cref="LibraryLoadOptions.OptionalAtBoot"/> = <see langword="true"/>
+    /// for "nice to have" dependencies (mail, social-connect, GeoIP) so a
+    /// bad config in one of them doesn't kill the whole application boot.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Critical — failure aborts boot:
+    /// await Libraries.LoadAsync&lt;MySQL2Library&gt;();
+    ///
+    /// // Optional — failure is logged but boot continues:
+    /// await Libraries.LoadAsync&lt;MailLibrary&gt;(new LibraryLoadOptions { OptionalAtBoot = true });
+    /// </code>
+    /// </example>
+    public static async Task<bool> LoadAsync<T>(LibraryLoadOptions options) where T : class, ILibrary, new()
+    {
+        var mgr = CodeLogic.GetLibraryManager()
+            ?? throw new InvalidOperationException(
+                "Library manager not available. Call InitializeAsync() first, " +
+                "then register libraries before ConfigureAsync().");
+        return await mgr.LoadLibraryAsync<T>(options);
+    }
+
+    /// <summary>
     /// Retrieves a loaded library by its string ID (e.g., <c>"CL.SQLite"</c>).
     /// Returns null if no library with that ID is loaded.
     /// </summary>
