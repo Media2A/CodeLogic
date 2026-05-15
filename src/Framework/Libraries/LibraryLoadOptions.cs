@@ -1,8 +1,8 @@
 namespace CodeLogic.Framework.Libraries;
 
 /// <summary>
-/// Per-library options threaded through <see cref="LibraryManager.LoadLibraryAsync{T}"/>
-/// (and the static <see cref="CodeLogic.Libraries.LoadAsync{T}(LibraryLoadOptions)"/>
+/// Per-library options threaded through <see cref="LibraryManager.LoadLibraryAsync{T}(LibraryLoadOptions)"/>
+/// (and the static <see cref="global::CodeLogic.Libraries.LoadAsync{T}(LibraryLoadOptions)"/>
 /// overload) to customise how the library participates in the boot sequence.
 /// </summary>
 public sealed record LibraryLoadOptions
@@ -11,7 +11,7 @@ public sealed record LibraryLoadOptions
     /// When <see langword="true"/>, a failure during Configure / Initialize /
     /// Start phases is logged + the library is marked
     /// <see cref="LibraryState.Failed"/>, but the application boots without it.
-    /// Consumers retrieving the library via <see cref="CodeLogic.Libraries.Get{T}"/>
+    /// Consumers retrieving the library via <see cref="global::CodeLogic.Libraries.Get{T}()"/>
     /// will get the loaded instance back — but since its <c>Context</c> is
     /// never set and downstream services typically check
     /// <c>IsAvailable</c>-style flags, calls into the disabled library are

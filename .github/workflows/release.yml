@@ -44,19 +44,25 @@ jobs:
           # Read the merge commit message for bump hints.
           # When merging main → release, the merge commit or the last
           # real commit determines the bump level.
+          # Conventional-commit prefixes match with optional (scope):
+          #   feat: …          → minor
+          #   feat(scope): …   → minor
+          #   feat!: …         → major (breaking-bang)
+          #   feat(scope)!: …  → major
+          #   BREAKING CHANGE in any commit body → major
           $msg = git log -1 --format=%B
-          if ($msg -match '(?i)breaking[:\s]|BREAKING CHANGE') {
+          if ($msg -match '(?im)^(breaking[:\s]|feat[!]|[a-z]+(\([^)]*\))?!:|BREAKING CHANGE)') {
             $bump = 'major'
-          } elseif ($msg -match '(?i)feat[:\s]') {
+          } elseif ($msg -match '(?im)^feat(\([^)]*\))?[:\s]') {
             $bump = 'minor'
           } else {
             # Look at all commits since the last tag for any feat/breaking
             $lastTag = git describe --tags --abbrev=0 2>$null
             if ($lastTag) {
               $log = git log "$lastTag..HEAD" --format=%s
-              if ($log -match '(?i)breaking[:\s]|BREAKING CHANGE') {
+              if ($log -match '(?im)^(breaking[:\s]|feat[!]|[a-z]+(\([^)]*\))?!:|BREAKING CHANGE)') {
                 $bump = 'major'
-              } elseif ($log -match '(?i)feat[:\s]') {
+              } elseif ($log -match '(?im)^feat(\([^)]*\))?[:\s]') {
                 $bump = 'minor'
               } else {
                 $bump = 'patch'
@@ -144,10 +150,6 @@ jobs:
             artifacts/*.nupkg
             artifacts/*.zip
 
-      - name: Sync version bump back to main
-        shell: bash
-        run: |
-          git fetch origin main
-          git checkout main
-          git merge release --no-edit -m "chore: sync release version bump to main [skip ci]"
-          git push origin main
+      # NOTE: version bumps are intentionally NOT synced back to main.
+      # main is the working branch (no auto-bump noise); release owns the
+      # version line. Push main → release to publish.
