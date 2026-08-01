@@ -40,6 +40,17 @@ public static class CodeLogic
         => _runtime.InitializeAsync(configure);
 
     /// <summary>
+    /// Gets an optional typed application startup parameter. Command-line values such as
+    /// <c>--mysql-host db.internal</c> take precedence over <c>MYSQL_HOST</c>.
+    /// </summary>
+    public static T? GetStartupParameter<T>(string name, T? defaultValue = default)
+        => _runtime.GetStartupParameter(name, defaultValue);
+
+    /// <summary>Gets a required typed application startup parameter.</summary>
+    public static T GetRequiredStartupParameter<T>(string name)
+        => _runtime.GetRequiredStartupParameter<T>(name);
+
+    /// <summary>
     /// Registers the consuming application with the runtime.
     /// Must be called after <see cref="InitializeAsync"/> and before <see cref="ConfigureAsync"/>.
     /// </summary>

@@ -136,7 +136,23 @@ Use this for local log levels and developer settings that should not be committe
 
 > **Important**: because this is a full replacement (not a merge), any settings you omit revert to their defaults — copy all the sections you care about from `CodeLogic.json` and then change only what differs.
 
-Per-component config files (`config.database.json`, etc.) do not have a development variant. Use environment-specific values directly in the config file, or use different config files per deployment environment.
+Per-component config files (`config.database.json`, etc.) do not have a development variant. For deployment values that must stay out of generated JSON, read a typed startup parameter and register a runtime-only library override from the application's `OnConfigureAsync`:
+
+```csharp
+public Task OnConfigureAsync(ApplicationContext context)
+{
+    var host = CodeLogic.GetRequiredStartupParameter<string>("mysql-host");
+
+    Libraries.OverrideConfig<DatabaseConfiguration>(
+        "CL.MySQL2",
+        "mysql",
+        config => config.Databases["Default"].Host = host);
+
+    return Task.CompletedTask;
+}
+```
+
+Set `MYSQL_HOST=db.internal` in the environment, or pass `--mysql-host db.internal` (or `--mysql-host=db.internal`). Command-line values win. The override is applied after the normal JSON is read but before final validation, is visible to the library during `OnInitializeAsync`, and is never written to the JSON file. Register it no later than application `OnConfigureAsync`; changing connection settings after a library starts still requires restart behavior.
 
 ---
 

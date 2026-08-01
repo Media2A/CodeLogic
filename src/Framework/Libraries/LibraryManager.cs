@@ -17,6 +17,9 @@ public sealed class LibraryManager : IDisposable
     private readonly List<LoadedLibrary> _libraries = [];
     private readonly Dictionary<string, ILibrary> _librariesById = new();
     private readonly IEventBus _eventBus;
+    private readonly object _configOverrideLock = new();
+    private readonly List<ConfigOverrideRegistration> _configOverrides = [];
+    private bool _configurationStarted;
 
     /// <summary>Logging options applied to library loggers.</summary>
     public LoggingOptions LoggingOptions { get; set; } = new();
@@ -36,6 +39,38 @@ public sealed class LibraryManager : IDisposable
     {
         _eventBus = eventBus;
         AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+    }
+
+    /// <summary>
+    /// Queues a typed, runtime-only configuration mutation. It must be registered before
+    /// library configuration begins; application <c>OnConfigureAsync</c> is the intended hook.
+    /// </summary>
+    public void OverrideConfig<TConfig>(
+        string libraryId,
+        string sectionName,
+        Action<TConfig> apply,
+        ConfigOverrideOptions? options = null)
+        where TConfig : ConfigModelBase
+    {
+        if (string.IsNullOrWhiteSpace(libraryId))
+            throw new ArgumentException("Library ID cannot be empty.", nameof(libraryId));
+        ArgumentNullException.ThrowIfNull(sectionName);
+        ArgumentNullException.ThrowIfNull(apply);
+
+        lock (_configOverrideLock)
+        {
+            if (_configurationStarted)
+                throw new InvalidOperationException(
+                    "Runtime config overrides must be registered before ConfigureAsync begins. " +
+                    "Changing a library after it has started requires a restart.");
+
+            _configOverrides.Add(new ConfigOverrideRegistration(
+                libraryId,
+                sectionName,
+                typeof(TConfig),
+                config => apply((TConfig)config),
+                options?.FailureMode ?? ConfigOverrideFailureMode.Strict));
+        }
     }
 
     // ── Discovery ────────────────────────────────────────────────────────────
@@ -166,6 +201,9 @@ public sealed class LibraryManager : IDisposable
         await _lock.WaitAsync();
         try
         {
+            lock (_configOverrideLock)
+                _configurationStarted = true;
+
             ValidateDependencies(GetOrderedLibraries());
 
             foreach (var loaded in GetOrderedLibraries())
@@ -198,7 +236,10 @@ public sealed class LibraryManager : IDisposable
                         if (forceGenerateConfigs && shouldApplyConfigGeneration)
                             await ctx.Configuration.GenerateAllDefaultsAsync(force: true);
 
-                        await ctx.Configuration.LoadAllAsync(generateIfMissing: allowMissingConfigs);
+                        await configuration.LoadAllWithRuntimeOverridesAsync(
+                            allowMissingConfigs,
+                            (type, section, config) => ApplyConfigOverrides(
+                                loaded.Manifest.Id, section, type, config, configuration, ctx.Logger));
                         await ctx.Localization.GenerateAllTemplatesAsync(SupportedCultures);
                         await ctx.Localization.LoadAllAsync(SupportedCultures);
                     }
@@ -221,6 +262,9 @@ public sealed class LibraryManager : IDisposable
                         throw;
                 }
             }
+
+            if (!dryRun)
+                ValidateUnresolvedConfigOverrides();
         }
         finally { _lock.Release(); }
     }
@@ -523,6 +567,110 @@ public sealed class LibraryManager : IDisposable
         context.Configuration as ConfigurationManager
         ?? throw new InvalidOperationException(
             "Library configuration manager must be CodeLogic.Core.Configuration.ConfigurationManager.");
+
+    private ConfigModelBase ApplyConfigOverrides(
+        string libraryId,
+        string sectionName,
+        Type configType,
+        ConfigModelBase jsonConfig,
+        ConfigurationManager configuration,
+        ILogger logger)
+    {
+        var current = jsonConfig;
+        List<ConfigOverrideRegistration> matching;
+        lock (_configOverrideLock)
+        {
+            matching = _configOverrides
+                .Where(o => string.Equals(o.LibraryId, libraryId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(o.SectionName, sectionName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            foreach (var registration in matching)
+                registration.TargetWasObserved = true;
+        }
+
+        foreach (var registration in matching)
+        {
+            if (registration.ConfigType != configType)
+            {
+                HandleConfigOverrideFailure(
+                    registration,
+                    $"section '{sectionName}' is registered as '{configType.Name}', not '{registration.ConfigType.Name}'.",
+                    logger);
+                continue;
+            }
+
+            try
+            {
+                // The callback receives a clone. Failed callbacks and validation therefore
+                // cannot alter the JSON-derived instance or a previously accepted override.
+                var working = configuration.CloneForRuntimeOverride(current, configType);
+                registration.Apply(working);
+                var validation = working.Validate();
+                if (!validation.IsValid)
+                    throw new InvalidOperationException($"result is invalid: {validation}");
+
+                current = working;
+            }
+            catch (Exception ex)
+            {
+                HandleConfigOverrideFailure(registration, "callback or validation failed", logger, ex);
+            }
+        }
+
+        return current;
+    }
+
+    private void ValidateUnresolvedConfigOverrides()
+    {
+        List<ConfigOverrideRegistration> unresolved;
+        lock (_configOverrideLock)
+            unresolved = _configOverrides.Where(o => !o.TargetWasObserved).ToList();
+
+        foreach (var registration in unresolved)
+        {
+            var libraryKnown = _libraries.Any(l => string.Equals(
+                l.Manifest.Id, registration.LibraryId, StringComparison.OrdinalIgnoreCase));
+            var reason = libraryKnown
+                ? $"section '{registration.SectionName}' was not registered by library '{registration.LibraryId}'."
+                : $"library '{registration.LibraryId}' was not loaded.";
+            HandleConfigOverrideFailure(registration, reason, logger: null);
+        }
+    }
+
+    private static void HandleConfigOverrideFailure(
+        ConfigOverrideRegistration registration,
+        string reason,
+        ILogger? logger,
+        Exception? exception = null)
+    {
+        var message = $"Runtime config override for library '{registration.LibraryId}', " +
+            $"section '{registration.SectionName}' failed: {reason}";
+        if (registration.FailureMode == ConfigOverrideFailureMode.Ignore)
+        {
+            if (logger is not null)
+                logger.Warning(message);
+            else
+                Console.Error.WriteLine($"  ⚠ {message}");
+            return;
+        }
+
+        throw new InvalidOperationException(message, exception);
+    }
+
+    private sealed class ConfigOverrideRegistration(
+        string libraryId,
+        string sectionName,
+        Type configType,
+        Action<ConfigModelBase> apply,
+        ConfigOverrideFailureMode failureMode)
+    {
+        public string LibraryId { get; } = libraryId;
+        public string SectionName { get; } = sectionName;
+        public Type ConfigType { get; } = configType;
+        public Action<ConfigModelBase> Apply { get; } = apply;
+        public ConfigOverrideFailureMode FailureMode { get; } = failureMode;
+        public bool TargetWasObserved { get; set; }
+    }
 
     private static void ReportDryRunConfigActions(ConfigurationManager configuration, bool force)
     {

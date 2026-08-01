@@ -10,6 +10,26 @@ namespace CodeLogic;
 public static class Libraries
 {
     /// <summary>
+    /// Queues an in-memory mutation for a library configuration section. The mutation runs
+    /// after the library's JSON is read and before final validation, so it is never written
+    /// back to disk and is visible when the library initializes.
+    /// Register overrides after <see cref="CodeLogic.InitializeAsync"/> and no later than
+    /// the application's <c>OnConfigureAsync</c> callback.
+    /// </summary>
+    public static void OverrideConfig<TConfig>(
+        string libraryId,
+        string sectionName,
+        Action<TConfig> apply,
+        ConfigOverrideOptions? options = null)
+        where TConfig : ConfigModelBase
+    {
+        var mgr = CodeLogic.GetLibraryManager()
+            ?? throw new InvalidOperationException(
+                "Library manager not available. Call InitializeAsync() before registering config overrides.");
+        mgr.OverrideConfig(libraryId, sectionName, apply, options);
+    }
+
+    /// <summary>
     /// Retrieves a loaded library by its concrete type.
     /// Returns null if no library of type <typeparamref name="T"/> is loaded.
     /// </summary>

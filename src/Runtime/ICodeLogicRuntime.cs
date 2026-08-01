@@ -25,6 +25,15 @@ public interface ICodeLogicRuntime
     Task<InitializationResult> InitializeAsync(Action<CodeLogicOptions>? configure = null);
 
     /// <summary>
+    /// Gets a startup value captured during <see cref="InitializeAsync"/>. A matching
+    /// <c>--name value</c> or <c>--name=value</c> wins over the normalized environment name.
+    /// </summary>
+    T? GetStartupParameter<T>(string name, T? defaultValue = default);
+
+    /// <summary>Gets a required typed startup value or throws when it was not supplied.</summary>
+    T GetRequiredStartupParameter<T>(string name);
+
+    /// <summary>
     /// Registers the consuming application with the runtime.
     /// Must be called after <see cref="InitializeAsync"/> and before <see cref="ConfigureAsync"/>.
     /// The application's <c>OnConfigureAsync</c> will be called during <see cref="ConfigureAsync"/>.

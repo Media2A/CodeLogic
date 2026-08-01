@@ -30,6 +30,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
     private LibraryManager? _libraryManager;
     private IApplication? _application;
     private ApplicationContext? _applicationContext;
+    private StartupParameterStore? _startupParameters;
     private System.Threading.Timer? _healthTimer;
     private bool _initialized;
     private bool _shutdownRegistered;
@@ -50,6 +51,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             configure?.Invoke(_options);
 
             var cli = CliArgParser.Parse();
+            _startupParameters = StartupParameterStore.Capture();
             if (cli.GenerateConfigs)            _options.GenerateConfigs = true;
             if (cli.GenerateConfigsForce)       _options.GenerateConfigsForce = true;
             if (cli.GenerateConfigsFor != null) _options.GenerateConfigsFor = cli.GenerateConfigsFor;
@@ -159,6 +161,14 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
             _lock.Release();
         }
     }
+
+    /// <summary>Gets an optional application startup parameter captured during initialization.</summary>
+    public T? GetStartupParameter<T>(string name, T? defaultValue = default) =>
+        GetStartupParametersOrThrow().Get(name, defaultValue);
+
+    /// <summary>Gets a required application startup parameter captured during initialization.</summary>
+    public T GetRequiredStartupParameter<T>(string name) =>
+        GetStartupParametersOrThrow().GetRequired<T>(name);
 
     /// <summary>
     /// Configures the application and all libraries, generating missing config files if needed.
@@ -360,6 +370,7 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
             _options = null;
             _config = null;
+            _startupParameters = null;
             _libraryManager = null;
             _application = null;
             _applicationContext = null;
@@ -435,6 +446,13 @@ public sealed class CodeLogicRuntime : ICodeLogicRuntime
 
     private CodeLogicConfiguration GetConfigOrThrow() =>
         _config ?? throw new InvalidOperationException("CodeLogic configuration not loaded.");
+
+    private StartupParameterStore GetStartupParametersOrThrow()
+    {
+        EnsureInitialized();
+        return _startupParameters
+            ?? throw new InvalidOperationException("CodeLogic startup parameters not available.");
+    }
 
     private void ApplyDebugDefaults()
     {

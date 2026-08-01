@@ -100,7 +100,8 @@ public sealed class ConfigurationManager : IConfigurationManager
         foreach (var type in _registered.Keys)
         {
             var method = typeof(ConfigurationManager)
-                .GetMethod(nameof(GenerateDefaultAsync), BindingFlags.Public | BindingFlags.Instance)
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .Single(m => m.Name == nameof(GenerateDefaultAsync) && m.IsGenericMethodDefinition)
                 ?? throw new InvalidOperationException(
                     $"Reflection failed: method '{nameof(GenerateDefaultAsync)}' not found.");
 
@@ -130,6 +131,56 @@ public sealed class ConfigurationManager : IConfigurationManager
 
             await task;
         }
+    }
+
+    /// <summary>
+    /// Loads all registered models while allowing the framework to replace a freshly
+    /// deserialized model before it is finally validated and cached. This is deliberately
+    /// internal: component contracts continue to expose the normal configuration API.
+    /// </summary>
+    internal async Task LoadAllWithRuntimeOverridesAsync(
+        bool generateIfMissing,
+        Func<Type, string, ConfigModelBase, ConfigModelBase> applyOverrides)
+    {
+        ArgumentNullException.ThrowIfNull(applyOverrides);
+
+        foreach (var (type, sectionName) in _registered)
+        {
+            var path = GetFilePath(type);
+            if (!File.Exists(path))
+            {
+                if (!generateIfMissing)
+                    throw new FileNotFoundException(
+                        $"Config file for '{type.Name}' not found at: {path}");
+
+                await GenerateDefaultAsync(type).ConfigureAwait(false);
+            }
+
+            var config = await ReadUnvalidatedAsync(type).ConfigureAwait(false);
+            var overridden = applyOverrides(type, sectionName, config)
+                ?? throw new InvalidOperationException(
+                    $"Runtime override for configuration '{type.Name}' returned null.");
+            if (overridden.GetType() != type)
+                throw new InvalidOperationException(
+                    $"Runtime override for configuration '{type.Name}' returned '{overridden.GetType().Name}'.");
+
+            var validation = overridden.Validate();
+            if (!validation.IsValid)
+                throw new InvalidOperationException(
+                    $"Configuration '{type.Name}' is invalid: {validation}");
+
+            // Publishing happens only after every override and the final validation succeeds.
+            _loaded[type] = overridden;
+        }
+    }
+
+    /// <summary>Creates an independent working copy for an atomic runtime override.</summary>
+    internal ConfigModelBase CloneForRuntimeOverride(ConfigModelBase config, Type type)
+    {
+        var json = JsonSerializer.Serialize(config, type, _jsonOptions);
+        return JsonSerializer.Deserialize(json, type, _jsonOptions) as ConfigModelBase
+            ?? throw new InvalidOperationException(
+                $"Failed to clone configuration '{type.Name}' for a runtime override.");
     }
 
     /// <inheritdoc />
@@ -426,5 +477,27 @@ public sealed class ConfigurationManager : IConfigurationManager
                 $"Configuration '{typeof(T).Name}' is invalid: {validation}");
 
         _loaded[typeof(T)] = config;
+    }
+
+    private async Task<ConfigModelBase> ReadUnvalidatedAsync(Type type)
+    {
+        var path = GetFilePath(type);
+        var json = await File.ReadAllTextAsync(path).ConfigureAwait(false);
+        return JsonSerializer.Deserialize(json, type, _jsonOptions) as ConfigModelBase
+            ?? throw new InvalidOperationException(
+                $"Failed to deserialize '{type.Name}' from {path}");
+    }
+
+    private async Task GenerateDefaultAsync(Type type)
+    {
+        var method = typeof(ConfigurationManager)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Single(m => m.Name == nameof(GenerateDefaultAsync) && m.IsGenericMethodDefinition)
+            ?? throw new InvalidOperationException(
+                $"Reflection failed: method '{nameof(GenerateDefaultAsync)}' not found.");
+        var task = method.MakeGenericMethod(type).Invoke(this, [false]) as Task
+            ?? throw new InvalidOperationException(
+                $"Reflection failed: '{nameof(GenerateDefaultAsync)}<{type.Name}>' returned null.");
+        await task.ConfigureAwait(false);
     }
 }
