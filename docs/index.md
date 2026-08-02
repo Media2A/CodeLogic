@@ -95,6 +95,18 @@ await Task.Delay(Timeout.Infinite);
 
 ---
 
+## Official Libraries
+
+Production-ready integrations are maintained in the
+[CodeLogic.Libs repository](https://github.com/Media2A/CodeLogic.Libs) and follow the same lifecycle.
+
+[`CodeLogic.Storage`](https://media2a.github.io/CodeLogic.Libs/libs/storage.html) provides one
+provider-neutral API over named local, S3-compatible, FTP/FTPS, SFTP, WebDAV, Azure Blob, Google
+Cloud Storage, and OpenStack Swift connections. It supports cross-provider transfers, capabilities,
+metadata, tags, versions, signed URLs, health checks, and native-provider escape hatches.
+
+---
+
 ## Directory Layout
 
 ```text

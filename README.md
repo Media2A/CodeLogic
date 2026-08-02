@@ -203,7 +203,7 @@ The [CodeLogic.* library family](https://github.com/Media2A/CodeLogic.Libs) prov
 | [CodeLogic.SQLite](https://www.nuget.org/packages/CodeLogic.SQLite) | SQLite with connection pooling and LINQ queries |
 | [CodeLogic.PostgreSQL](https://www.nuget.org/packages/CodeLogic.PostgreSQL) | PostgreSQL integration |
 | [CodeLogic.Mail](https://www.nuget.org/packages/CodeLogic.Mail) | SMTP/IMAP email with template engine |
-| [CodeLogic.StorageS3](https://www.nuget.org/packages/CodeLogic.StorageS3) | Amazon S3 / Cloudflare R2 / MinIO storage |
+| [CodeLogic.Storage](https://www.nuget.org/packages/CodeLogic.Storage) | Provider-neutral mounted storage for local filesystems, S3/R2/MinIO, FTP/FTPS, SFTP, WebDAV, Azure Blob, Google Cloud Storage, and OpenStack Swift |
 | [CodeLogic.SocialConnect](https://www.nuget.org/packages/CodeLogic.SocialConnect) | Discord webhooks + Steam Web API |
 | [CodeLogic.NetUtils](https://www.nuget.org/packages/CodeLogic.NetUtils) | DNS, DNSBL, IP geolocation |
 | [CodeLogic.GameNetQuery](https://www.nuget.org/packages/CodeLogic.GameNetQuery) | Game server queries (Valve RCON, Source UDP, Minecraft) |
@@ -212,6 +212,11 @@ The [CodeLogic.* library family](https://github.com/Media2A/CodeLogic.Libs) prov
 | [CodeLogic.TwoFactorAuth](https://www.nuget.org/packages/CodeLogic.TwoFactorAuth) | TOTP 2FA + QR code generation |
 
 Each library follows the same lifecycle pattern — load it with `Libraries.LoadAsync<T>()`, configure it via its auto-generated JSON config file, and use it.
+
+For storage, see the [complete `CL.Storage` guide](https://media2a.github.io/CodeLogic.Libs/libs/storage.html)
+for named multi-provider connections, configuration, transfers, metadata, tags, versions, signed URLs,
+health checks, and native-provider access. Existing `CodeLogic.StorageS3` users can follow the
+[migration guide](https://github.com/Media2A/CodeLogic.Libs/blob/main/CL.Storage/MIGRATION.md).
 
 ## Requirements
 
