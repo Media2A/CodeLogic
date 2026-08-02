@@ -8,3 +8,5 @@
 - name: API Reference
   href: api/
   homepage: api/index.md
+- name: Official Libraries
+  href: https://media2a.github.io/CodeLogic.Libs/
