@@ -54,7 +54,7 @@ jobs:
 
       - name: Checkout
         if: steps.gate.outputs.go == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
