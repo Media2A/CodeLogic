@@ -1,0 +1,90 @@
+name: Promote main to release
+
+# Automatic publishing. When the full test suite passes on main, main is merged into
+# release, which is the branch that publishes to nuget.org.
+#
+# Two things make this defensible rather than reckless:
+#
+#   1. This only fires on a SUCCESSFUL Tests run for a commit already on main, and the
+#      release workflow independently re-runs the same suite before it packs anything.
+#      A red suite stops the promotion, and a suite that goes red between promotion and
+#      publish stops the publish.
+#
+#   2. Publishing is irreversible - a nuget.org version can be delisted but never
+#      replaced or reused - so the release workflow also pre-flights every package
+#      before pushing any of them.
+#
+# To stop auto-publishing without touching this file, add a repository variable
+# AUTO_PUBLISH with the value "false". The job below checks it.
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: promote-release
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    # Only a green suite on main promotes. workflow_run fires on failure too.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check the kill switch
+        id: gate
+        run: |
+          if [ "${{ vars.AUTO_PUBLISH }}" = "false" ]; then
+            echo "::notice::AUTO_PUBLISH is false - promotion skipped."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Merge main into release
+        if: steps.gate.outputs.go == 'true'
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout release
+          git merge --no-ff origin/main -m "Merge main into release: automated promotion
+
+          Tests passed on main at ${{ github.event.workflow_run.head_sha || github.sha }}.
+          The release workflow re-runs the same suite before packing."
+
+          if git diff --quiet HEAD origin/release; then
+            echo "::notice::release already matches main - nothing to publish."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git push origin release
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A push made with GITHUB_TOKEN does not trigger other workflows - GitHub blocks
+      # that to prevent recursion. The release workflow is therefore dispatched
+      # explicitly rather than relying on its push trigger.
+      - name: Trigger the release workflow
+        if: steps.gate.outputs.go == 'true' && steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml --ref release

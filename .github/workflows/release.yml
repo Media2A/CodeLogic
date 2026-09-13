@@ -14,7 +14,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Publishing to nuget.org cannot be undone - a version can be delisted but never
+  # replaced or reused. Nothing is packed until the suite is green.
+  verify:
+    uses: ./.github/workflows/ci-tests.yml
+
   release:
+    needs: [verify]
     runs-on: ubuntu-latest
 
     steps:
@@ -119,6 +125,31 @@ jobs:
             /p:PackageVersion=${{ steps.version.outputs.new_version }} \
             /p:Version=${{ steps.version.outputs.new_version }} \
             /p:InformationalVersion=${{ steps.version.outputs.new_version }}
+
+      # A partial push cannot be undone: dotnet nuget push walks artifacts one at a
+      # time and aborts on the first rejection, leaving earlier packages published.
+      # CodeLogic.Libs hit exactly that when a changelog outgrew the 35 000 character
+      # releaseNotes cap. Validate before pushing anything.
+      - name: Pre-flight packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          count=0
+          for pkg in artifacts/*.nupkg; do
+            count=$((count + 1))
+            nuspec=$(unzip -p "$pkg" '*.nuspec' | tr -d '\n')
+            notes=$(printf '%s' "$nuspec" | sed -n 's|.*<releaseNotes>\(.*\)</releaseNotes>.*|\1|p' | wc -c)
+            if [ "$notes" -gt 35000 ]; then
+              echo "::error::$(basename "$pkg"): releaseNotes is $notes chars, nuget.org caps at 35000"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::refusing to publish - a partial push cannot be undone"
+            exit 1
+          fi
+          echo "pre-flight OK: $count package(s)"
 
       - name: Push to NuGet.org
         run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

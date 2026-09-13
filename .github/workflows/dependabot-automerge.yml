@@ -1,0 +1,61 @@
+name: Dependabot auto-merge
+
+# Merges a Dependabot pull request once the full suite is green — which, because the
+# promote workflow watches main, means the update publishes to nuget.org on its own.
+#
+# Major version bumps are deliberately NOT auto-merged; they land as PRs for a human.
+#
+# Note this repository's suite is thin (8 tests), so "green" is a weaker signal here
+# than it is in CodeLogic.Libs. Widening that suite is the single best thing that could
+# be done for the safety of this automation.
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fetch update metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide
+        id: decide
+        run: |
+          set -euo pipefail
+          type='${{ steps.meta.outputs.update-type }}'
+          names='${{ steps.meta.outputs.dependency-names }}'
+
+          if [ "$type" = "version-update:semver-major" ]; then
+            echo "::notice::major update - leaving for review"
+            echo "merge=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "updating: $names"
+          echo "merge=true" >> "$GITHUB_OUTPUT"
+
+      # --auto waits for the required checks rather than merging immediately, so the
+      # suite still gates the merge even though no human looked at it.
+      - name: Enable auto-merge
+        if: steps.decide.outputs.merge == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+
+      - name: Explain why it was left alone
+        if: steps.decide.outputs.merge == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.html_url }}" --body \
+            "Not auto-merged: major version bump. Merge it normally and the promote workflow will publish it."
