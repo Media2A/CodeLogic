@@ -3,11 +3,13 @@ name: Dependabot auto-merge
 # Merges a Dependabot pull request once the full suite is green — which, because the
 # promote workflow watches main, means the update publishes to nuget.org on its own.
 #
-# Major version bumps are deliberately NOT auto-merged; they land as PRs for a human.
+# Deliberately NOT auto-merged:
+#   - major version bumps
+#   - the database providers (MySqlConnector, Npgsql, SqlClient, Sqlite)
 #
-# Note this repository's suite is thin (8 tests), so "green" is a weaker signal here
-# than it is in CodeLogic.Libs. Widening that suite is the single best thing that could
-# be done for the safety of this automation.
+# A driver's patch release can change SQL generation, type mapping or connection
+# behaviour in ways a passing suite will not necessarily notice — this repository spent
+# a long day on exactly that class of bug. Those land as PRs for a human to read.
 
 on:
   pull_request:
@@ -24,7 +26,7 @@ jobs:
     steps:
       - name: Fetch update metadata
         id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -41,8 +43,15 @@ jobs:
             exit 0
           fi
 
-          echo "updating: $names"
-          echo "merge=true" >> "$GITHUB_OUTPUT"
+          case "$names" in
+            *MySqlConnector*|*Npgsql*|*SqlClient*|*Sqlite*)
+              echo "::notice::database provider update - leaving for review"
+              echo "merge=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "merge=true" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
       # --auto waits for the required checks rather than merging immediately, so the
       # suite still gates the merge even though no human looked at it.
@@ -58,4 +67,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr comment "${{ github.event.pull_request.html_url }}" --body \
-            "Not auto-merged: major version bump. Merge it normally and the promote workflow will publish it."
+            "Not auto-merged: ${{ steps.decide.outputs.reason }}. Merge it normally once you are happy and the promote workflow will publish it."
