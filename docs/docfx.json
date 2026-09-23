@@ -37,7 +37,7 @@
     },
     "template": ["default", "modern"],
     "sitemap": {
-      "baseUrl": "https://media2a.github.io/CodeLogic"
+      "baseUrl": "https://zyntal-com.github.io/CodeLogic"
     },
     "xref": [],
     "exportRawModel": false,

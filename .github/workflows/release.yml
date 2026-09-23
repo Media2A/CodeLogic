@@ -15,18 +15,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Publishing to nuget.org cannot be undone - a version can be delisted but never
+  # replaced or reused. Nothing is packed until the suite is green.
+  verify:
+    uses: ./.github/workflows/ci-tests.yml
+
   release:
+    needs: [verify]
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -69,6 +75,31 @@ jobs:
             /p:Version=${{ steps.version.outputs.version }} \
             /p:InformationalVersion=${{ steps.version.outputs.version }}
 
+      # A partial push cannot be undone: dotnet nuget push walks artifacts one at a
+      # time and aborts on the first rejection, leaving earlier packages published.
+      # CodeLogic.Libs hit exactly that when a changelog outgrew the 35 000 character
+      # releaseNotes cap. Validate before pushing anything.
+      - name: Pre-flight packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          count=0
+          for pkg in artifacts/*.nupkg; do
+            count=$((count + 1))
+            nuspec=$(unzip -p "$pkg" '*.nuspec' | tr -d '\n')
+            notes=$(printf '%s' "$nuspec" | sed -n 's|.*<releaseNotes>\(.*\)</releaseNotes>.*|\1|p' | wc -c)
+            if [ "$notes" -gt 35000 ]; then
+              echo "::error::$(basename "$pkg"): releaseNotes is $notes chars, nuget.org caps at 35000"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::refusing to publish - a partial push cannot be undone"
+            exit 1
+          fi
+          echo "pre-flight OK: $count package(s)"
+
       - name: Push to NuGet.org
         run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
@@ -87,7 +118,7 @@ jobs:
           "@ | Set-Content 'artifacts/release-notes.md'
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.tag_version }}
           name: CodeLogic ${{ steps.version.outputs.tag_version }}

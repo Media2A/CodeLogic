@@ -43,8 +43,8 @@
     <Description>Modular .NET 10 framework with lifecycle-managed libraries, applications, and plugins. Zero external NuGet dependencies.</Description>
     <PackageId>CodeLogic</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/Media2A/CodeLogic</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/Media2A/CodeLogic</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/zyntal-com/CodeLogic</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/zyntal-com/CodeLogic</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>framework;modular;lifecycle;libraries;plugins;dotnet</PackageTags>
     <PackageReadmeFile>README.nuget.md</PackageReadmeFile>

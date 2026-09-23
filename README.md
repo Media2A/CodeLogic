@@ -20,7 +20,7 @@ CodeLogic gives you a **structured lifecycle** out of the box:
 - **Libraries** (reusable integrations) and **Applications** (your business logic) follow the same 4-phase lifecycle: Configure → Initialize → Start → Stop. Dependencies are always resolved in the right order.
 - **Configuration** and **Localization** are built in — not bolted on. Each library and application gets its own config file, auto-generated on first run with defaults and validation.
 - **Plugins** are first-class citizens with hot-reload, isolated assembly contexts, and the same lifecycle as libraries.
-- **Zero external dependencies.** CodeLogic itself has no NuGet dependencies — it's pure .NET 10. External integrations (MySQL, S3, SMTP, etc.) are optional library packages in the [CodeLogic.* family](https://github.com/Media2A/CodeLogic.Libs).
+- **Zero external dependencies.** CodeLogic itself has no NuGet dependencies — it's pure .NET 10. External integrations (MySQL, S3, SMTP, etc.) are optional library packages in the [CodeLogic.* family](https://github.com/zyntal-com/CodeLogic.Libs).
 
 ## Install
 
@@ -194,7 +194,7 @@ public class MyPlugin : IPlugin
 
 ## Official Library Packages
 
-The [CodeLogic.* library family](https://github.com/Media2A/CodeLogic.Libs) provides production-ready integrations:
+The [CodeLogic.* library family](https://github.com/zyntal-com/CodeLogic.Libs) provides production-ready integrations:
 
 | Package | Description |
 |---------|-------------|
@@ -213,10 +213,10 @@ The [CodeLogic.* library family](https://github.com/Media2A/CodeLogic.Libs) prov
 
 Each library follows the same lifecycle pattern — load it with `Libraries.LoadAsync<T>()`, configure it via its auto-generated JSON config file, and use it.
 
-For storage, see the [complete `CL.Storage` guide](https://media2a.github.io/CodeLogic.Libs/libs/storage.html)
+For storage, see the [complete `CL.Storage` guide](https://zyntal-com.github.io/CodeLogic.Libs/libs/storage/index.html)
 for named multi-provider connections, configuration, transfers, metadata, tags, versions, signed URLs,
 health checks, and native-provider access. Existing `CodeLogic.StorageS3` users can follow the
-[migration guide](https://github.com/Media2A/CodeLogic.Libs/blob/main/CL.Storage/MIGRATION.md).
+[migration guide](https://github.com/zyntal-com/CodeLogic.Libs/blob/main/CL.Storage/MIGRATION.md).
 
 ## Requirements
 

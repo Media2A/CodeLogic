@@ -42,8 +42,8 @@ Library, application, and plugin development.
 
 | Document | Description |
 |----------|-------------|
-| [`CL.Storage`](https://media2a.github.io/CodeLogic.Libs/libs/storage.html) | Provider-neutral mounted storage across local filesystems, S3-compatible services, FTP/FTPS, SFTP, WebDAV, Azure Blob, Google Cloud Storage, and OpenStack Swift, including multi-connection configuration and cross-provider transfers. |
-| [CodeLogic Libraries](https://media2a.github.io/CodeLogic.Libs/) | Documentation and API reference for all official `CodeLogic.*` integration packages. |
+| [`CL.Storage`](https://zyntal-com.github.io/CodeLogic.Libs/libs/storage/index.html) | Provider-neutral mounted storage across local filesystems, S3-compatible services, FTP/FTPS, SFTP, WebDAV, Azure Blob, Google Cloud Storage, and OpenStack Swift, including multi-connection configuration and cross-provider transfers. |
+| [CodeLogic Libraries](https://zyntal-com.github.io/CodeLogic.Libs/) | Documentation and API reference for all official `CodeLogic.*` integration packages. |
 
 ---
 

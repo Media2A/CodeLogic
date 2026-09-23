@@ -1,0 +1,74 @@
+name: Dependabot auto-merge
+
+# Merges a Dependabot pull request once the required checks are green.
+#
+# The policy splits on what a bad update can actually reach:
+#
+#   github-actions  - auto-merged at every level, majors included. A bad Actions bump
+#                     breaks CI loudly rather than shipping anything.
+#   nuget           - patch and minor only. These go INTO the build output.
+#
+# This repository's suite is 8 tests, a far weaker signal than CodeLogic.Libs' 921,
+# and every library in the ecosystem depends on this package. Widening that suite is
+# the most valuable safety work available here.
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fetch update metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide
+        id: decide
+        run: |
+          set -euo pipefail
+          type='${{ steps.meta.outputs.update-type }}'
+          names='${{ steps.meta.outputs.dependency-names }}'
+          eco='${{ steps.meta.outputs.package-ecosystem }}'
+          echo "ecosystem=$eco type=$type names=$names"
+
+          # CI-only dependencies cannot reach a build output or a published package.
+          if [ "$eco" = "github_actions" ]; then
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$type" = "version-update:semver-major" ]; then
+            echo "::notice::major package update - leaving for review"
+            echo "reason=a major version bump of a shipped dependency" >> "$GITHUB_OUTPUT"
+            echo "merge=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "merge=true" >> "$GITHUB_OUTPUT"
+
+      # --auto queues the merge behind pending required checks. GitHub rejects it when a
+      # PR is already green ("clean status") or when the repository has auto-merge
+      # disabled, so fall back to a direct squash - the checks have passed by then.
+      - name: Merge
+        if: steps.decide.outputs.merge == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr merge --auto --squash "$PR" || gh pr merge --squash --delete-branch "$PR"
+
+      - name: Explain why it was left alone
+        if: steps.decide.outputs.merge == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.html_url }}" --body             "Not auto-merged: ${{ steps.decide.outputs.reason }}. Merge it normally once you are happy, and the pipeline takes it from there."
